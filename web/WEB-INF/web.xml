@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+	 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	 xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+	 version="2.4">
+  <display-name>SRW/U Service</display-name>
+  <servlet>
+    <servlet-name>SRWServlet</servlet-name>
+    <display-name>SRW/U Servlet</display-name>
+    <servlet-class>
+        ORG.oclc.os.SRW.SRWServlet
+    </servlet-class>
+    <!--init-param>
+      <param-name>PropertiesFile</param-name>
+      <param-value>webapps/SRW/SRWServer.propss</param-value>
+    </init-param-->
+    <load-on-startup>4</load-on-startup>
+  </servlet>
+
+  <servlet>
+    <servlet-name>SRUServerTesterServlet</servlet-name>
+    <display-name>SRU Server Tester Servlet</display-name>
+    <servlet-class>ORG.oclc.os.SRW.SRUServerTesterServlet</servlet-class>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>SRWServlet</servlet-name>
+    <url-pattern>/search/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>SRUServerTesterServlet</servlet-name>
+    <url-pattern>/test/SRUServerTester</url-pattern>
+  </servlet-mapping>
+
+
+  <!-- currently the W3C havent settled on a media type for WSDL;
+    http://www.w3.org/TR/2003/WD-wsdl12-20030303/#ietf-draft
+    for now we go with the basic 'it's XML' response -->
+  <mime-mapping>
+    <extension>wsdl</extension>
+     <mime-type>text/xml</mime-type>
+  </mime-mapping>
+  
+
+  <mime-mapping>
+    <extension>xsd</extension>
+    <mime-type>text/xml</mime-type>
+  </mime-mapping>
+</web-app>

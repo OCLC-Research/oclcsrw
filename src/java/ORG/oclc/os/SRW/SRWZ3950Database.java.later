@@ -1,0 +1,203 @@
+/*
+   Copyright 2006 OCLC Online Computer Library Center, Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ */
+/*
+ * SRWZ3950Database.java
+ *
+ * Created on February 9, 2004, 10:04 AM
+ */
+
+package ORG.oclc.os.SRW;
+
+import java.util.Stack;
+import gov.loc.www.zing.srw.ScanRequestType;
+import gov.loc.www.zing.srw.ScanResponseType;
+import gov.loc.www.zing.srw.SearchRetrieveRequestType;
+import gov.loc.www.zing.srw.SearchRetrieveResponseType;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import ORG.oclc.ber.BerString;
+import ORG.oclc.ber.DataDir;
+import ORG.oclc.z39.Diagnostic1;
+import ORG.oclc.z39.Z39presentApi;
+import ORG.oclc.z39.Z39session;
+import org.z3950.zing.cql.CQLNode;
+
+/**
+ *
+ * @author  levan
+ */
+public class SRWZ3950Database extends SRWDatabase {
+
+    int    port;
+    Log    log=LogFactory.getLog(SRWZ3950Database.class);
+    Stack  sessions=new Stack();
+    String host, zdbname;
+    
+    public ScanResponseType doRequest(
+      ScanRequestType request) throws javax.servlet.ServletException {
+        return null;
+    }
+    
+    public SearchRetrieveResponseType doRequest(
+      SearchRetrieveRequestType request) throws javax.servlet.ServletException {
+        SearchRetrieveResponseType response=new SearchRetrieveResponseType();
+        Z39session session;
+        try {
+            session=getSession();
+        }
+        catch(Diagnostic1 e) {
+            diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                response);
+            log.error(e, e);
+            return response;
+        }
+        catch(Exception e) {
+            diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                response);
+            log.error(e, e);
+            return response;
+        }
+        
+        String query=request.getQuery();
+        log.info("query="+query);
+        CQLNode root;
+        try {
+            root = parser.parse(query);
+        }
+        catch(org.z3950.zing.cql.CQLParseException e) {
+            diagnostic(SRWDiagnostics.QuerySyntaxError, e.getMessage(),
+                response);
+            log.error(e, e);
+            return response;
+        }
+        catch(java.io.IOException e) {
+            diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                response);
+            log.error(e, e);
+            return response;
+        }
+        resultSetID=root.getResultSetName();
+        if(resultSetID!=null) {
+//            result=(Result)oldResultSets.get(resultSetID);
+//            if(result==null)
+//                return diagnostic(SRWDiagnostics.ResultSetDoesNotExist,
+//                    resultSetID, response);
+        }
+        else {
+            byte[] q;
+            try {
+                q=CQLNode.makeQuery(root, dbProperties);
+            }
+            catch(org.z3950.zing.cql.PQFTranslationException e) {
+                diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                    response);
+                log.error(e, e);
+                return response;
+            }
+            DataDir query101=new DataDir(new BerString(q));
+            DataDir attributesPlusTerm=query101.child().next();
+            try {
+                session.search.doSearch(0, 0, 10000000,
+                  request.getMaximumRecords().intValue(), 1, "default", zdbname,
+                  null, "f", Z39presentApi.OCLC_BER_SYNTAX, null, 101, null,
+                  attributesPlusTerm, true);
+            }
+            catch(ORG.oclc.z39.AccessControl e) {
+                diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                    response);
+                log.error(e, e);
+                return response;
+            }
+            catch(Diagnostic1 e) {
+                diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                    response);
+                log.error(e, e);
+                return response;
+            }
+            catch(Exception e) {
+                diagnostic(SRWDiagnostics.GeneralSystemError, e.getMessage(),
+                    response);
+                log.error(e, e);
+                return response;
+            }
+        }
+        return null;
+    }
+    
+    public String getIndexInfo() {
+        StringBuffer sb=new StringBuffer();
+        sb.append("        <indexInfo>\n")
+          .append("          <set identifier=\"info:srw/cql-context-set/1/cql-v1.1\"")
+          .append(" name=\"cql\"/>\n")
+          .append("          <index>\n")
+          .append("            <title>Any</title>\n")
+          .append("            <map>\n")
+          .append("              <name set=\"cql\">any</name>\n")
+          .append("              </map>\n")
+          .append("            </index>\n")
+          .append("          </indexInfo>\n");
+        return sb.toString();
+    }
+
+
+    protected Z39session getSession() throws Diagnostic1, Exception {
+        Z39session session;
+        synchronized(sessions) {
+            if(sessions.isEmpty()) {
+                session=new Z39session();
+                session.initClient(host, port);
+                    session.init.doInit(1, null, 500000,  100000000,
+                      null, null, null, null, false);
+            }
+            else {
+                session=(Z39session)sessions.pop();
+            }
+        }
+        return session;
+    }
+
+
+    public void init(String dbname, java.util.Properties properties) {
+        log.info("entering SRWZ3950Database.init, dbname="+dbname);
+        super.init(dbname, properties, log, transformers);
+        host=dbProperties.getProperty("host");
+        log.info("host="+host);
+        log.info("port="+dbProperties.getProperty("port"));
+        port=Integer.parseInt(dbProperties.getProperty("port"));
+        zdbname=dbProperties.getProperty("database");
+        log.info("database="+zdbname);
+        log.info("leaving SRWZ3950Database.init");
+    }
+    
+    public void init(String dbname, String srwHome, String dbHome, String dbPropertiesFileName, java.util.Properties dbProperties) {
+    }
+    
+    public boolean supportsSort() {
+    }
+    
+    public int getMaximumRecords() {
+    }
+    
+    public int getNumberOfRecords() {
+    }
+    
+    public void setMaximumRecords(int maximumRecords) {
+    }
+    
+    public void setNumberOfRecords(int numberOfRecords) {
+    }
+    
+}
