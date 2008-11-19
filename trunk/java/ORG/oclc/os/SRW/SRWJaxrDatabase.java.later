@@ -1,0 +1,260 @@
+/*
+   Copyright 2006 OCLC Online Computer Library Center, Inc.
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ */
+/*
+ * SRWJaxrDatabase.java
+ *
+ * Created on August 5, 2003, 4:17 PM
+ */
+
+package ORG.oclc.os.SRW;
+
+import gov.loc.www.zing.srw.v1_0.*;
+import gov.loc.www.zing.srw.v1_0.diagnostic.DiagnosticType;
+import gov.loc.www.zing.srw.v1_0.diagnostic.DiagnosticType_code;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.util.Enumeration;
+import java.util.Hashtable;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.StringTokenizer;
+import javax.servlet.ServletException;
+//import javax.xml.parsers.DocumentBuilder;
+//import javax.xml.parsers.DocumentBuilderFactory;
+//import javax.xml.parsers.FactoryConfigurationError;
+//import javax.xml.parsers.ParserConfigurationException;
+//import javax.xml.transform.Source;
+import javax.xml.registry.*;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.transform.Transformer;
+//import javax.xml.transform.TransformerFactory;
+import org.apache.axis.message.MessageElement;
+import org.apache.axis.MessageContext;
+import org.apache.log4j.Category;
+import org.w3c.dom.Document;
+import org.w3c.dom.DOMException;
+import org.w3c.dom.Element;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+import org.xml.sax.SAXParseException;
+import org.z3950.zing.cql.CQLNode;
+
+/**
+ *
+ * @author  levan
+ */
+public class SRWJaxrDatabase extends SRWDatabase {
+    Category      log=Category.getInstance(SRWJaxrDatabase.class.getName());
+    
+    public SearchRetrieveResponseType doRequest(
+      SearchRetrieveRequestType request, String dbname)
+      throws ServletException {
+        try {
+            MessageContext msgContext=MessageContext.getCurrentContext();
+            SearchRetrieveResponseType response=new SearchRetrieveResponseType();
+            SRWServlet     servlet=(SRWServlet)msgContext.getProperty("servlet");
+
+            String query=request.getQuery();
+            log.info("query="+query);
+            CQLNode root = parser.parse(query);
+            resultSetID=root.getResultSetName();
+            if(resultSetID!=null) {
+                /*
+                result=(Result)servlet.oldResultSets.get(resultSetID);
+                if(result==null) {
+                    DiagnosticType[] diags=new DiagnosticType[1];
+                    diags[0]=new DiagnosticType();
+                    diags[0].setCode(new DiagnosticType_code("51"));
+                    diags[0].setDetails(resultSetID);
+                    SearchRetrieveResponseType_diagnostics diagnostics=new SearchRetrieveResponseType_diagnostics();
+                    diagnostics.setDiagnostic(diags);
+                    response.setDiagnostics(diagnostics);
+                    log.info("invalid resultSetName: \""+resultSetID+"\"");
+                    return response;
+                }
+                 */
+            }
+            else {
+                // do the JAXR search here
+                resultSetID=makeResultSetID();
+                //servlet.oldResultSets.put(resultSetID, result);
+            }
+            int postings=0; // need a result object
+            
+            log.info("'" + query + "'==> " + postings);
+            response.setNumberOfRecords(new SearchRetrieveResponseType_numberOfRecords(Integer.toString(postings)));
+            response.setNextRecordPosition(new SearchRetrieveResponseType_nextRecordPosition("1"));
+            
+            int numRecs=0;
+            SearchRetrieveRequestType_maximumRecords maxRecs=request.getMaximumRecords();
+            if(maxRecs!=null)
+                numRecs=(int)java.lang.Math.min(maxRecs.getValue().longValue(), 10L);
+            
+            int startPoint=1;
+            SearchRetrieveRequestType_startRecord startRec=request.getStartRecord();
+            if(startRec!=null)
+                startPoint=(int)startRec.getValue().longValue();
+            if((startPoint-1+numRecs)>postings)
+                numRecs=postings-(startPoint-1);
+            log.info("startRecord="+startPoint+", maximumRecords="+numRecs);
+            if(postings>0 && numRecs>0) { // render some records into SGML
+                SearchRetrieveResponseType_records records=
+                    new SearchRetrieveResponseType_records();
+                log.info("trying to get "+numRecs+" records starting with record "+
+                startPoint+" from a set of "+postings+" records");
+                
+                String schema, uri=request.getRecordSchema();
+                if(uri==null)
+                    schema="default";
+                else
+                    schema=uri;
+                String qualifiedSchemaName=dbname+'/'+schema.replace(':', '.');
+                log.info("recordSchema="+schema);
+                records.setRecord(new RecordType[numRecs]);
+                Object handler=transformers.get(qualifiedSchemaName);
+                if(handler==null) {
+                    log.info("no handler for schema "+schema);
+                    for(Enumeration enum2=transformers.keys();
+                    enum2.hasMoreElements();)
+                        log.info("handler name="+(String)enum2.nextElement());
+                }
+                String        stringRecord;
+                Transformer   transformer=null;
+                byte[]           byteRecord;
+                int              i, listEntry=-1;
+                RecordType       record;
+                StreamSource     streamXMLRecord;
+                StringReader     stringRecordReader;
+                StringWriter     xmlRecordWriter;
+                    transformer=(Transformer)handler;
+                
+                /**
+                 * One at a time, retrieve and display the requested documents.
+                 */
+                for(i=0; i<numRecs; i++) {
+                    try {
+                            byteRecord=null; // get record from JAXR
+                            log.info("XML version as provided by HandleSGML:");
+                            log.info("\n"+ORG.oclc.util.Util.byteArrayToString(byteRecord));
+                            try {
+                                stringRecord=new String(byteRecord, "UTF8");
+                            }
+                            catch(java.io.UnsupportedEncodingException e) {
+                                stringRecord=null;  // can't happen
+                            }
+                            stringRecordReader=new StringReader(stringRecord);
+                            xmlRecordWriter=new StringWriter();
+                            streamXMLRecord=new StreamSource(stringRecordReader);
+                            transformer.transform(streamXMLRecord,
+                            new StreamResult(xmlRecordWriter));
+                            stringRecord=xmlRecordWriter.toString();
+                        record=new RecordType();
+                        record.setRecordData(stringRecord);
+                        
+                        if(uri!=null)
+                            record.setRecordSchema(uri);
+                        record.setRecordPosition(new RecordType_recordPosition(Integer.toString(startPoint)));
+                        
+                        //log.info("transformed record:");
+                        //log.info(ORG.oclc.util.Util.byteArrayToString(stringRecord.getBytes()));
+                        records.setRecord(i, record);
+                    } catch (NoSuchElementException e) {
+                        log.error("Read beyond the end of list!!");
+                        log.error(e);
+                        break;
+                    } catch (javax.xml.transform.TransformerException t) {
+                        log.error("error reading document "+listEntry+
+                        " from list");
+                        log.error(t);
+                    }
+                    
+                    startPoint++;
+                    response.setRecords(records);
+                }
+                response.setNextRecordPosition(new SearchRetrieveResponseType_nextRecordPosition(Long.toString(startPoint)));
+            }
+            return response;
+        }
+        catch(Exception e) {
+            log.error(e);
+            e.printStackTrace();
+            return null;//throw new RemoteException(e.getMessage());
+        }
+    }
+    
+    public String getExplainRecord() {
+        return null;
+    }
+    
+    public void init(String dbname, Properties properties) {
+        log.debug("entering SRWJaxrDatabase.init, dbname="+dbname);
+        super.init(dbname, globalProperties, servlet, log, transformers);
+
+        
+        log.debug("leaving SRWJaxrDatabase.init");
+        return;
+    }
+    
+    public SearchRetrieveResponseType doRequest(SearchRetrieveRequestType request, String dbname) throws ServletException {
+    }
+    
+    public SearchRetrieveResponseType doRequest(SearchRetrieveRequestType request, String dbname) throws ServletException {
+    }
+    
+    public ScanResponseType doRequest(ScanRequestType request, String dbname) throws ServletException {
+    }
+    
+    public ScanResponseType doRequest(ScanRequestType request, String dbname) throws ServletException {
+    }
+    
+    public String getIndexInfo() {
+    }
+    
+    public SearchRetrieveResponseType doRequest(SearchRetrieveRequestType request) throws ServletException {
+    }
+    
+    public ScanResponseType doRequest(ScanRequestType request) throws ServletException {
+    }
+    
+    public gov.loc.www.zing.srw.SearchRetrieveResponseType doRequest(gov.loc.www.zing.srw.SearchRetrieveRequestType request) throws ServletException {
+    }
+    
+    public gov.loc.www.zing.srw.ScanResponseType doRequest(gov.loc.www.zing.srw.ScanRequestType request) throws ServletException {
+    }
+    
+    public void init(String dbname, String srwHome, String dbHome, String dbPropertiesFileName, Properties dbProperties) {
+    }
+    
+    public boolean supportsSort() {
+    }
+    
+    public int getMaximumRecords() {
+    }
+    
+    public int getNumberOfRecords() {
+    }
+    
+    public void setMaximumRecords(int maximumRecords) {
+    }
+    
+    public void setNumberOfRecords(int numberOfRecords) {
+    }
+    
+}
