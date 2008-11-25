@@ -29,7 +29,7 @@ You can change the name of your default.database, if you want.
 
 You can change the resultSetIdleTime, if you want. This is a time in seconds and determines how long query results are kept after they have last been referenced. 
 
-DSpace
+[http://www.dspace.org/ DSpace]
 If you are running DSpace, then you need to change db.DSpace.home to point at your DSpace directory. This will be the directory that contains the DSpace conf directory. (Don't forget the trailing slash on the path.) The SRWServer.props file is set to point at an SRW configuration file for the DSpace database. It expects to find that configuration file in the conf subdirectory of the DSpace directory. You will need to copy the file DSpace.SRWDatabase.props to your /conf directory. (See DSpaceSRWConfiguration.html for information about that file.)
 
 If you are not running DSpace, this section can be left in the configuration file with no ill effects. 
