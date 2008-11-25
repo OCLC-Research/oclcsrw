@@ -7,5 +7,4 @@ Documentation (such as it is) and other stuff.
 
 = Details =
 
-[InstallationInstructions]
-http://code.google.com/p/oclcsrw/wiki/InstallationInstructions
+[InstallationInstructions](out of date! please be patient!)
