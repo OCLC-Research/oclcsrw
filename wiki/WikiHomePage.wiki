@@ -1,0 +1,10 @@
+#summary Home page for OCLC SRW/SRU Wiki.
+
+= Introduction =
+
+Documentation (such as it is) and other stuff.
+
+
+= Details =
+
+[InstallationInstructions](out of date! please be patient!)
