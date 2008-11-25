@@ -15,12 +15,12 @@ The code distributed in the zip file may be out of date.  You can run “ant che
 Run “ant war” to compile the code and build a war file.  “ant deploy” will do that also, plus copy the war file to your `<tomcat>/webapps` directory, if you’ve specified the serverPath in the build.properties file.  After you’ve run “ant war”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW jar files to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. 
 
 Configuration Files
-The two primary configuration files, web.xml and SRWServer.props, are in the <SRW>/WEB-INF and <SRW>/WEB-INF/classes directories respectively. web.xml controls the interaction between Tomcat and the SRW servlet. SRWServer.props controls the behavior of the servlet.
+The two primary configuration files, web.xml and SRWServer.props, are in the `<SRW>/WEB-INF` and `<SRW>/WEB-INF/classes` directories respectively. web.xml controls the interaction between Tomcat and the SRW servlet. SRWServer.props controls the behavior of the servlet.
 
 web.xml
 Every web service, of which SRW is one, has a web.xml configuration file. This file contains configuration information for the servlet engine (Tomcat) and optional parameters for the servlets. It resides in the WEB-INF subdirectory of the web service. There should be little reason to edit this file.
 
-There is a single optional parameter for the SRW server: PropertiesFile.  This parameter is commented out in the distribution.  Normally, the server expects to see a file named SRWServer.props in the <tomcat>/webapps/<SRW>/WEB-INF/classes directory.  If you have a need to either rename or move that file, then you’ll want to uncomment the parameter and specify the full path to the properties file. 
+There is a single optional parameter for the SRW server: PropertiesFile.  This parameter is commented out in the distribution.  Normally, the server expects to see a file named SRWServer.props in the `<tomcat>/webapps/<SRW>/WEB-INF/classes` directory.  If you have a need to either rename or move that file, then you’ll want to uncomment the parameter and specify the full path to the properties file. 
 
 SRWServer.props
 By default, the SRW server expects to find any files it needs in the WEB-INF/classes directory.  If you need to put things like the SRWServer.props file or XSLT files for record transformation anywhere else, then you should edit the SRW.Home path to point at that directory. 
@@ -38,9 +38,9 @@ Pears/ Newton
 There are three pieces of information necessary to configure a Pears or Newton database. First, you specify that the database is a Pears/Newton database with the db.<dbname>.class parameter, setting it to ORG.oclc.os.SRW.SRWPearsDatabase. Replace <dbname> with the name of your database. (Sorry, no embedded blanks in the dbname.) Next, you specify the location of the files needed by the database via the db.<dbname>.home parameter. You point this at the path to the directory that contains, at least, the SRW configuration properties file for the database. (Don't forget the trailing slash on the path.) Finally, you specify the name of the properties file via the db.<dbname>.configuration parameter. Typically, this file is named SRWDatabase.props. (See PearsSRWConfiguration.html for information about that file.) 
 
 Build
-Go to the <SRW> directory and run ant. (See The Apache Ant Project for more information about ant.) By default, it compiles the source code and builds the srw.jar file in the <SRW>/build/ directory. If you have previously deployed the SRW.war file, then this is probably all you need to build and you should copy <SRW>/build/srw.jar to your existing <Tomcat>/webapps/SRW/WEB-INF/lib directory. 
+Go to the `<SRW>` directory and run ant. (See The Apache Ant Project for more information about ant.) By default, it compiles the source code and builds the srw.jar file in the `<SRW>/build/` directory. If you have previously deployed the SRW.war file, then this is probably all you need to build and you should copy `<SRW>/build/srw.jar` to your existing `<Tomcat>/webapps/SRW/WEB-INF/lib` directory. 
 
-If you need to build the SRW.war file to deploy the SRW service, then enter "ant war" at the command line. Copy the SRW.war file from the <SRW>/build/ directory to the <Tomcat>/webapps directory. When you restart Tomcat, it will create a new webapp named SRW. If you would like to name the service something else (e.g. dspace-srw) then simply rename the SRW.war file (e.g. dspace-srw.war.) Restart your Tomcat server. 
+If you need to build the SRW.war file to deploy the SRW service, then enter "ant war" at the command line. Copy the SRW.war file from the `<SRW>/build/` directory to the `<Tomcat>/webapps` directory. When you restart Tomcat, it will create a new webapp named SRW. If you would like to name the service something else (e.g. dspace-srw) then simply rename the SRW.war file (e.g. dspace-srw.war.) Restart your Tomcat server. 
 
 You can get the latest version of the SRW Server code by entering "ant checkout" at the command line. This will get the latest copy of the code from our CVS repository. (See Concurrent Versions System for more information about CVS.) After getting the new code, you will want to run ant to build the .jar and .war files. 
 
@@ -114,7 +114,7 @@ Finally, comes a question-mark and the SRW parameters. Information about SRW can
 CVS Repository
 The source code for the SRW Server is available from OCLC Research's CVS server. You can access it using the cvsroot: :pserver:anonymous@pubserv.oclc.org:/home/CVS/srw/cvsroot. 
 
-The <SRW>/src directory already has the control files necessary to access our CVS server. You should be able to point your favorite CVS tool at that directory. 
+The `<SRW>/src` directory already has the control files necessary to access our CVS server. You should be able to point your favorite CVS tool at that directory. 
 
 Finally, there is an ant task that will update the <SRW/src directory. "ant checkout" on the command line will run this task and update your source files with the latest version. 
 
