@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE attributes PUBLIC "-//NetBeans//DTD DefaultAttributes 1.0//EN" "http://www.netbeans.org/dtds/attributes-1_0.dtd">
+<attributes version="1.0">
+    <fileobject name="ExplainSoapBindingImpl.java">
+        <attr name="class_dependency_gov.loc.www.zing.srw.interfaces.ExplainPort" stringvalue="ExplainSoapBindingImpl"/>
+    </fileobject>
+    <fileobject name="SRWSoapBindingImpl.java">
+        <attr name="class_dependency_gov.loc.www.zing.srw.interfaces.SRWPort" stringvalue="SRWSoapBindingImpl"/>
+    </fileobject>
+    <fileobject name="SRWSoapBindingSkeleton.java">
+        <attr name="class_dependency_gov.loc.www.zing.srw.interfaces.SRWPort" stringvalue="SRWSoapBindingSkeleton"/>
+        <attr name="class_dependency_org.apache.axis.wsdl.Skeleton" stringvalue="SRWSoapBindingSkeleton"/>
+    </fileobject>
+</attributes>

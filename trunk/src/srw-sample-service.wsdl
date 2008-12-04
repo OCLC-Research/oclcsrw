@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ZiNG SRU/SRW WSDL Specification                   -->
+<!-- Version 1.1                                       -->
+<!-- 5 October 2004                                    -->
+<definitions xmlns:srw-bindings="http://www.loc.gov/zing/srw/srw-bindings/" xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" targetNamespace="http://www.loc.gov/zing/srw/srw-sample-service/" name="SRW">
+  <import namespace="http://www.loc.gov/zing/srw/srw-bindings/" location="srw-bindings.wsdl"/>
+  <service name="SRWSampleService">
+    <port name="SRW" binding="srw-bindings:SRW-SoapBinding">
+      <soap:address location="http://insertserver/inserturl/"/>
+    </port>
+    <port name="ExplainSOAP" binding="srw-bindings:Explain-SoapBinding">
+      <soap:address location="http://insertserver/inserturl/"/>
+    </port>
+    <port name="ExplainHTTPGet" binding="srw-bindings:Explain-HTTPGetBinding">
+      <http:address location="http://insertserver/inserturl/"/>
+    </port>
+    <port name="ExplainHTTPGetRoot" binding="srw-bindings:Explain-HTTPGetRootBinding">
+      <http:address location="http://insertserver/inserturl/"/>
+    </port>
+  </service>
+</definitions>
