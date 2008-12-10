@@ -1468,13 +1468,12 @@ sb.append("        </explain>\n");
 
     static public void setExtraRecordData(RecordType rt, String extraData) {
         ExtraDataType edt=rt.getExtraRecordData();
-        StringBuffer extraResponseData = new StringBuffer();
-        if(edt==null) 
-            extraResponseData.append("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
-        else {
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
-            extraResponseData.append(currentExtraData.substring(0, currentExtraData.length()-"</extraData>".length()));
+            int end=currentExtraData.lastIndexOf('<'), start=currentExtraData.indexOf('<', 1);
+            extraResponseData.append(currentExtraData.substring(start, end-1));
         }
         extraResponseData.append(extraData).append("</extraData>");
         rt.setExtraRecordData(makeExtraDataType(extraResponseData.toString()));
@@ -1483,13 +1482,12 @@ sb.append("        </explain>\n");
 
     static public void setExtraResponseData(ScanResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer();
-        if(edt==null) 
-            extraResponseData.append("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
-        else {
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
-            extraResponseData.append(currentExtraData.substring(0, currentExtraData.length()-"</extraData>".length()));
+            int end=currentExtraData.lastIndexOf('<'), start=currentExtraData.indexOf('<', 1);
+            extraResponseData.append(currentExtraData.substring(start, end-1));
         }
         extraResponseData.append(extraData).append("</extraData>");
         response.setExtraResponseData(makeExtraDataType(extraResponseData.toString()));
@@ -1498,13 +1496,12 @@ sb.append("        </explain>\n");
 
     static public void setExtraResponseData(SearchRetrieveResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer();
-        if(edt==null) 
-            extraResponseData.append("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
-        else {
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
-            extraResponseData.append(currentExtraData.substring(0, currentExtraData.length()-"</extraData>".length()));
+            int end=currentExtraData.lastIndexOf('<'), start=currentExtraData.indexOf('<', 1);
+            extraResponseData.append(currentExtraData.substring(start, end-1));
         }
         extraResponseData.append(extraData).append("</extraData>");
         response.setExtraResponseData(makeExtraDataType(extraResponseData.toString()));
