@@ -23,6 +23,10 @@ package ORG.oclc.os.SRW;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.TermType;
 import gov.loc.www.zing.srw.TermTypeWhereInList;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
 import java.text.ParseException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -42,15 +46,22 @@ public class TermTypeIterator implements Iterator {
     /**
      * Creates a new instance of TermTypeIterator
      */
-    public TermTypeIterator(String baseURL, String index, String relation, String term) throws ParseException {
+    public TermTypeIterator(String baseURL, String index, String relation, String term) throws ParseException, IOException {
         this(baseURL, index, relation, term, false);
     }
     
-    public TermTypeIterator(String baseURL, String index, String relation, String term, boolean decreasing) throws ParseException {
+    public TermTypeIterator(String baseURL, String index, String relation, String term, boolean decreasing) throws ParseException, IOException {
         this.decreasing=decreasing;
         this.baseURL=baseURL+"?operation=scan&version=1.1";
         this.index=index;
         this.relation=relation;
+        URL url=new URL(baseURL);
+        HttpURLConnection conn = (HttpURLConnection)url.openConnection();
+        System.out.println("responseCode="+conn.getResponseCode());
+        if(conn.getContentType().toLowerCase().indexOf("xml")<0)
+            throw new IOException("baseURL \""+baseURL+
+                "\" should have returned a content type"+
+                " of text/xml but actually returned "+conn.getContentType());
         if(decreasing) {
             pos=-1;
         }
