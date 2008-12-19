@@ -1468,7 +1468,7 @@ sb.append("        </explain>\n");
 
     static public void setExtraRecordData(RecordType rt, String extraData) {
         ExtraDataType edt=rt.getExtraRecordData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
@@ -1482,7 +1482,7 @@ sb.append("        </explain>\n");
 
     static public void setExtraResponseData(ScanResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
@@ -1496,7 +1496,7 @@ sb.append("        </explain>\n");
 
     static public void setExtraResponseData(SearchRetrieveResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\"");
+        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
