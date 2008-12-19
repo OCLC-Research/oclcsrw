@@ -409,6 +409,7 @@ public class Utilities {
             urlStream=huc.getInputStream();
         }
         catch(java.io.IOException e) {
+            e.printStackTrace();
             System.out.print("test failed: opening URL: ");System.out.print(e.getMessage());System.out.print('\n');
             return null;
         }
@@ -529,7 +530,7 @@ public class Utilities {
                 c1=s.charAt(i+1);
                 switch(c1) {
                     case '#':
-                        if(s.charAt(i+2)=='x') {
+                        if(s.length()>i+2 && s.charAt(i+2)=='x') {
                             if(!changed) {
                                 if(i>0)
                                     sb=new StringBuffer(s.substring(0, i));
@@ -542,7 +543,7 @@ public class Utilities {
                         }
                         break;
                     case 'a':
-                        if(s.charAt(i+2)=='p' && s.charAt(i+3)=='o' &&
+                        if(s.length()>i+5 && s.charAt(i+2)=='p' && s.charAt(i+3)=='o' &&
                            s.charAt(i+4)=='s' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
@@ -554,7 +555,7 @@ public class Utilities {
                             sb.append('\'');
                             i+=5;
                         }
-                        else if(s.charAt(i+2)=='m' && s.charAt(i+3)=='p' &&
+                        else if(s.length()>i+3 && s.charAt(i+2)=='m' && s.charAt(i+3)=='p' &&
                           s.charAt(i+4)==';') {
                             if(!changed) {
                                 if(i>0)
@@ -568,7 +569,7 @@ public class Utilities {
                         }
                         break;
                     case 'g':
-                        if(s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
+                        if(s.length()>i+3 && s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
                             if(!changed) {
                                 if(i>0)
                                     sb=new StringBuffer(s.substring(0, i));
@@ -581,7 +582,7 @@ public class Utilities {
                         }
                         break;
                     case 'l':
-                        if(s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
+                        if(s.length()>i+3 && s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
                             if(!changed) {
                                 if(i>0)
                                     sb=new StringBuffer(s.substring(0, i));
@@ -594,7 +595,7 @@ public class Utilities {
                         }
                         break;
                     case 'q':
-                        if(s.charAt(i+2)=='u' && s.charAt(i+3)=='o' &&
+                        if(s.length()>i+5 && s.charAt(i+2)=='u' && s.charAt(i+3)=='o' &&
                            s.charAt(i+4)=='t' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
