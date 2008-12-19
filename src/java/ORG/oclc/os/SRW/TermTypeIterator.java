@@ -24,9 +24,10 @@ import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.TermType;
 import gov.loc.www.zing.srw.TermTypeWhereInList;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.text.ParseException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -80,12 +81,14 @@ public class TermTypeIterator implements Iterator {
                 pos=NumScanTerms;
                 try {
                     terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
-                      baseURL+"&scanClause="+index+"%20"+relation+"%20%22"+Utilities.urlEncode(seed)+
+                      baseURL+"&scanClause="+index+"%20"+relation+"%20%22"+URLEncoder.encode(seed, "UTF-8")+
                               "%22&responsePosition="+(NumScanTerms+1)+
                               "&maximumTerms="+NumScanTerms))).getTerms().getTerm();
                 }
                 catch(ParseException e) {
                     throw new NoSuchElementException(e.getMessage());
+                }
+                catch(UnsupportedEncodingException e) {
                 }
                 if(terms==null)
                     return false;
@@ -112,7 +115,7 @@ public class TermTypeIterator implements Iterator {
 //                          "%22&responsePosition=1"+
 //                          "&maximumTerms="+NumScanTerms);
                 terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
-                  baseURL+"&scanClause="+index+"+"+relation+"+%22"+Utilities.urlEncode(seed)+
+                  baseURL+"&scanClause="+index+"+"+relation+"+%22"+URLEncoder.encode(seed, "UTF-8")+
                           "%22&responsePosition=1"+
                           "&maximumTerms="+NumScanTerms))).getTerms().getTerm();
 //                System.out.println("first returned term is "+terms[0].getValue());
@@ -120,6 +123,7 @@ public class TermTypeIterator implements Iterator {
             catch(ParseException e) {
                 throw new NoSuchElementException(e.getMessage());
             }
+            catch(UnsupportedEncodingException e){}
             if(terms==null) {
 //                System.out.println("url returned no terms: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+Utilities.urlEncode(seed)+
 //                          "%22&responsePosition=1"+
