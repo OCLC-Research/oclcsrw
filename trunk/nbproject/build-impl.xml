@@ -501,17 +501,19 @@ exists or setup the property manually. For example like this:
         <copyfiles files="${file.reference.axis.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.axis.jar" todir="${dist.ear.dir}"/>
         <copyfiles files="${file.reference.cql-java.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.cql-java.jar" todir="${dist.ear.dir}"/>
         <copyfiles files="${file.reference.jaxrpc.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.jaxrpc.jar" todir="${dist.ear.dir}"/>
+        <copyfiles files="${file.reference.ostermillerutils.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.ostermillerutils.jar" todir="${dist.ear.dir}"/>
         <copyfiles files="${file.reference.saaj.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.saaj.jar" todir="${dist.ear.dir}"/>
         <copyfiles files="${file.reference.xalan.jar}" iftldtodir="${build.web.dir}/WEB-INF" manifestproperty="manifest.file.reference.xalan.jar" todir="${dist.ear.dir}"/>
         <mkdir dir="${build.web.dir}/META-INF"/>
         <manifest file="${build.web.dir}/META-INF/MANIFEST.MF" mode="update">
-            <attribute name="Class-Path" value="${manifest.file.reference.axis.jar} ${manifest.file.reference.cql-java.jar} ${manifest.file.reference.jaxrpc.jar} ${manifest.file.reference.saaj.jar} ${manifest.file.reference.xalan.jar} "/>
+            <attribute name="Class-Path" value="${manifest.file.reference.axis.jar} ${manifest.file.reference.cql-java.jar} ${manifest.file.reference.jaxrpc.jar} ${manifest.file.reference.ostermillerutils.jar} ${manifest.file.reference.saaj.jar} ${manifest.file.reference.xalan.jar} "/>
         </manifest>
     </target>
     <target depends="init" name="library-inclusion-in-archive" unless="dist.ear.dir">
         <copyfiles files="${file.reference.axis.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
         <copyfiles files="${file.reference.cql-java.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
         <copyfiles files="${file.reference.jaxrpc.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
+        <copyfiles files="${file.reference.ostermillerutils.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
         <copyfiles files="${file.reference.saaj.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
         <copyfiles files="${file.reference.xalan.jar}" todir="${build.web.dir}/WEB-INF/lib"/>
     </target>

@@ -28,7 +28,8 @@
                     <file>${file.reference.log4j.jar}</file>
                 </library>
                 <library>
-                    <file>${file.reference.ostermillerutils}</file>
+                    <file>${file.reference.ostermillerutils.jar}</file>
+                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library>
                     <file>${file.reference.saaj.jar}</file>
