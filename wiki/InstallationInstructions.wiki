@@ -8,11 +8,9 @@ Instructions for how to build and install an SRW/SRU server for DSpace, Lucene a
 = Details =
 
 ==OCLC Research SRW Server 2.0 Installation Instructions==
-Get and unpack the file SRW.zip.  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace or Pears interfaces.  The normal DSpace installation will have all the jars necessary and all you’ll have to do is edit build.properties to point to the directory that contains the DSpace jars.  If you want a Pears interface built, you’ll need to edit build.properties to point to the directory that contains the Pears jar.  That directory may also contain the Gwen and Dbutils jars or you can edit build.properties to point at their directories if you are maintaining them separately.
+Download the latest SRW server from the SVN repository.  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace, Lucene or Pears interfaces.  The normal DSpace installation will have all the jars necessary and all you’ll have to do is edit build.properties to point to the directory that contains the DSpace jars.  If you want a Pears interface built, you’ll need to edit build.properties to point to the directory that contains the Pears jar.  That directory may also contain the Gwen and Dbutils jars or you can edit build.properties to point at their directories if you are maintaining them separately.
 
-The code distributed in the zip file may be out of date.  You can run “ant checkout” to get the latest versions of the code.
-
-Run “ant war” to compile the code and build a war file.  “ant deploy” will do that also, plus copy the war file to your `<tomcat>/webapps` directory, if you’ve specified the serverPath in the build.properties file.  After you’ve run “ant war”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW jar files to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. 
+Run “ant” to compile the code and build a war file.  After you’ve run “ant”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW jar files to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. 
 
 ===Configuration Files===
 The two primary configuration files, web.xml and SRWServer.props, are in the `<SRW>/WEB-INF` and `<SRW>/WEB-INF/classes` directories respectively. web.xml controls the interaction between Tomcat and the SRW servlet. SRWServer.props controls the behavior of the servlet.
