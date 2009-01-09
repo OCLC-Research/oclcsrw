@@ -12,4 +12,4 @@ Complete information on the SRW/SRU standard can be found at the maintenance age
 
 = Details =
 
-[InstallationInstructions](out of date! please be patient!)
+[InstallationInstructions]
