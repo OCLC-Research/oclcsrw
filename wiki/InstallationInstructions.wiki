@@ -8,7 +8,12 @@ Instructions for how to build and install an SRW/SRU server for DSpace, Lucene a
 = Details =
 
 ==OCLC Research SRW Server 2.0 Installation Instructions==
-Download the latest SRW server from the SVN repository.  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace, Lucene or Pears interfaces.  The normal DSpace installation will have all the jars necessary and all you’ll have to do is edit build.properties to point to the directory that contains the DSpace jars.  If you want a Pears interface built, you’ll need to edit build.properties to point to the directory that contains the Pears jar.  That directory may also contain the Gwen and Dbutils jars or you can edit build.properties to point at their directories if you are maintaining them separately.
+Download and build the SRW Database interface software that you want.
+  * [http://code.google.com/p/oclcsrwdspacelucene DSpace]
+  * [http://code.google.com/p/oclcsrwlucene Lucene]
+  * [http://code.google.com/p/oclcsrwfederatedsearching Federated Searching]
+
+Download the latest SRW server from the SVN repository.  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace, Lucene or SRW Federated Searching interfaces.  You will need to copy the jar file from the "dist" directory of the database interface project and the jars from the "lib" directory to the web/WEB-INF/lib directory of the SRW distribution.
 
 Run “ant” to compile the code and build a war file.  After you’ve run “ant”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW jar files to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. 
 
