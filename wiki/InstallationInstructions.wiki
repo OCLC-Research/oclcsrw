@@ -24,15 +24,13 @@ Download the latest SRW server from the SVN repository.  It contains everything 
 The server, as downloaded, includes a test database interface.  This will allow you to verify that the server is operating.  But, eventually you will want to add an interface for a specific database.  Download the package for that database and follow its build instructions.  Then, copy the jar file from the "dist" directory of the database interface package and the jars (except the SRW jar!) from the "lib" directory to the web/WEB-INF/lib directory of the SRW distribution.
 
 ===Step 3===
-Run “ant” to compile the code and build a war file.  After you’ve run “ant”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW jar files to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. Otherwise, copy the SRW.war file to your `<tomcat>/webapps` directory.
+Run “ant” to compile the code and build a war file.  After you’ve run “ant”, you’ll find a directory named “dist” and in it you will find the war file and the SRW jar files.  If you have an existing SRW deployment with its own configuration files, you may want to just copy the SRW.jar file to your `<tomcat>/webapps/<SRW>/WEB-INF/lib` directory. Otherwise, copy the SRW.war file to your `<tomcat>/webapps` directory.
 
 ===Step 4===
 Start (or restart) your tomcat server.  You should see an SRW directory in the `<tomcat>/webapps` directory.  Try searching the test database.  The URL below assumes you have installed the servlet engine at port 8080 on your local machine.  Change the host and port if your configuration is different.
 
 [http://localhost:8080/SRW/search/test]
 [http://localhost:8080/SRW/search/test?query=dog]
-
-
 
 ===Configuration Files===
 The two primary configuration files, web.xml and SRWServer.props, are in the `<SRW>/WEB-INF` and `<SRW>/WEB-INF/classes` directories respectively. web.xml controls the interaction between Tomcat and the SRW servlet. SRWServer.props controls the behavior of the servlet.
