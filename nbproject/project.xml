@@ -12,9 +12,11 @@
                 </library>
                 <library>
                     <file>${file.reference.commons-discovery.jar}</file>
+                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library>
                     <file>${file.reference.commons-logging.jar}</file>
+                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library>
                     <file>${file.reference.cql-java.jar}</file>
@@ -26,6 +28,7 @@
                 </library>
                 <library>
                     <file>${file.reference.log4j.jar}</file>
+                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library>
                     <file>${file.reference.ostermillerutils.jar}</file>
@@ -40,6 +43,7 @@
                 </library>
                 <library>
                     <file>${file.reference.wsdl4j.jar}</file>
+                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
                 <library>
                     <file>${file.reference.xalan.jar}</file>
