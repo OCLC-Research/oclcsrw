@@ -18,7 +18,7 @@ Download and build the SRW Database interface software that you want.
   * Ant
 
 ===Step 1===
-Download the latest SRW server from the SVN repository.  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace, Lucene or SRW Federated Searching interfaces.
+Download the latest SRW server from the SVN repository.  (Instructions for that can be found [http://code.google.com/p/oclcsrw/source/checkout here].)  It contains everything you need to build the base SRW server, but does not include the libraries necessary to build the DSpace, Lucene or SRW Federated Searching interfaces.
 
 ===Barely Optional Step 2===
 The server, as downloaded, includes a test database interface.  This will allow you to verify that the server is operating.  But, eventually you will want to add an interface for a specific database.  Download the package for that database and follow its build instructions.  Then, copy the jar file from the "dist" directory of the database interface package and the jars (except the SRW jar!) from the "lib" directory to the web/WEB-INF/lib directory of the SRW distribution.
