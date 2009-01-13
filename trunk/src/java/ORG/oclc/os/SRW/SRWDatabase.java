@@ -1238,6 +1238,8 @@ public abstract class SRWDatabase {
             scanStyleSheet=dbProperties.getProperty("scanStyleSheet");
             if(scanStyleSheet==null)
                 scanStyleSheet="/$context/scanResponse.xsl";
+            if(servletContext!=null && servletContext.startsWith("/"))
+                servletContext=servletContext.substring(1);
             if(servletContext!=null && servletContext.length()>0) {
                 explainStyleSheet=explainStyleSheet.replace("$context", servletContext);
                 searchStyleSheet=searchStyleSheet.replace("$context", servletContext);
