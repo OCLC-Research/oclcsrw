@@ -202,7 +202,7 @@ public class SRWServletInfo {
                recordPacking=request.getParameter("recordPacking"),
                stylesheet=request.getParameter("stylesheet");
         log.info("Got an explain request for database "+dbname);
-        SRWDatabase db=SRWDatabase.getDB(dbname, properties);
+        SRWDatabase db=SRWDatabase.getDB(dbname, properties, request.getContextPath());
         if(db==null) {
             log.error("Non-existant database "+dbname+" in properties file \""+propsfileName+"\"");
             response.setStatus(404);
