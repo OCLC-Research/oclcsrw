@@ -29,10 +29,10 @@ Run “ant” to compile the code and build a war file.  After you’ve run “a
 ===Step 4===
 Start (or restart) your tomcat server.  You should see an SRW directory in the `<tomcat>/webapps` directory.  Try searching the test database.  The URL below assumes you have installed the servlet engine at port 8080 on your local machine.  Change the host and port if your configuration is different.
 
-[http://localhost:8080/SRW/search/test]
+[http://localhost:8080/SRW/search/test] should get you something like this:
 http://oclcsrw.googlecode.com/svn/wiki/images/TestExplainResponse.jpg
 
-[http://localhost:8080/SRW/search/test?query=dog]
+[http://localhost:8080/SRW/search/test?query=dog] should get you something like this:
 http://oclcsrw.googlecode.com/svn/wiki/images/TestSearchResponse.jpg
 
 ===Configuration Files===
