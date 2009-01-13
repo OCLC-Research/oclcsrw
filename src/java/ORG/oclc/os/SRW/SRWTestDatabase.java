@@ -22,13 +22,8 @@
 package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.ScanRequestType;
-import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
-import gov.loc.www.zing.srw.TermType;
-import gov.loc.www.zing.srw.TermsType;
 import java.util.Properties;
-import javax.servlet.ServletException;
-import org.apache.axis.types.PositiveInteger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.z3950.zing.cql.CQLTermNode;
@@ -39,7 +34,6 @@ import org.z3950.zing.cql.CQLTermNode;
  */
 public class SRWTestDatabase extends SRWDatabase {
     Log log=LogFactory.getLog(SRWTestDatabase.class);
-    int defaultNumRecs=0, maximumRecords=10;
     String schemaID="info:srw/schema/1/dc-v1.1";
 
     public void addRenderer(String schemaName, String schemaID, Properties props)
@@ -123,14 +117,6 @@ public class SRWTestDatabase extends SRWDatabase {
         return;
     }
 
-    public void setMaximumRecords(int maximumRecords) {
-        this.maximumRecords=maximumRecords;
-    }
-    
-    public void setNumberOfRecords(int numberOfRecords) {
-        defaultNumRecs=numberOfRecords;
-    }
-    
     public boolean supportsSort() {
         return false;
     }
