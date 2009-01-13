@@ -7,7 +7,7 @@
   <display-name>SRW/U Service</display-name>
   <servlet>
     <servlet-name>SRWServlet</servlet-name>
-    <display-name>SRW/U Servlet</display-name>
+    <!--display-name>SRW/U Servlet</display-name-->
     <servlet-class>
         ORG.oclc.os.SRW.SRWServlet
     </servlet-class>
@@ -20,7 +20,7 @@
 
   <servlet>
     <servlet-name>SRUServerTesterServlet</servlet-name>
-    <display-name>SRU Server Tester Servlet</display-name>
+    <!--display-name>SRU Server Tester Servlet</display-name-->
     <servlet-class>ORG.oclc.os.SRW.SRUServerTesterServlet</servlet-class>
   </servlet>
 
