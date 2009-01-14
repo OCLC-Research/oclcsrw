@@ -58,7 +58,7 @@ db.test.class=ORG.oclc.os.SRW.SRWTestDatabase
 # parameters for the lucene test database
 # CHANGE THE PATH TO THE TEST DATABASE!
 db.lucenetest.class=ORG.oclc.os.SRW.Lucene.SRWLuceneDatabase
-db.lucenetest.home=c:/oclcsrwlucene-read-only/test
+db.lucenetest.home=c:/oclcsrwlucene-read-only/lucene
 
 #db.SciFi.class=ORG.oclc.os.SRW.Pears.SRWPearsDatabase
 #db.SciFi.home=f:/dbs/scifi/
