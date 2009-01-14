@@ -263,7 +263,7 @@ public abstract class SRWDatabase {
             return diagnostic(SRWDiagnostic.UnsupportedVersion, version, scanResponse);
 
         CQLTermNode root = null;
-        int max = 9,  pos = 5;
+        int max = maxTerms,  pos = position;
         long startTime = System.currentTimeMillis();
         PositiveInteger pi = request.getMaximumTerms();
         if(pi!=null) {
