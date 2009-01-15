@@ -41,7 +41,7 @@ import org.z3950.zing.cql.CQLTermNode;
 public class SRWDatabasePool extends SRWDatabase {
     static Log log=LogFactory.getLog(SRWDatabasePool.class);
 
-    LinkedList queue=new LinkedList();
+    LinkedList<SRWDatabase> queue=new LinkedList<SRWDatabase>();
     String dbList=null;
     
     /** Creates a new instance of SRWDatabasePool */

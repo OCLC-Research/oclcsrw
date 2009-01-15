@@ -468,8 +468,8 @@ public class EmbeddedSRWDatabase {
         return false;
     }
 
-    public static Hashtable parseInput(String input) {
-        Hashtable parms=new Hashtable();
+    public static Hashtable<String, String> parseInput(String input) {
+        Hashtable<String, String> parms=new Hashtable<String, String>();
         int offset;
         String name, parm, value;
         StringTokenizer st=new StringTokenizer(input, "&");

@@ -33,7 +33,7 @@ public abstract class QueryResult extends SRWDiagnosticsHolder {
     public abstract RecordIterator newRecordIterator(long index, int numRecs,
             String schemaId, ExtraDataType edt) throws InstantiationException;
 
-    Hashtable sortedResults=null;
+    Hashtable<String, QueryResult> sortedResults=null;
     private int       resultSetIdleTime;
     RecordIterator recordIterator=null;
 
@@ -51,19 +51,19 @@ public abstract class QueryResult extends SRWDiagnosticsHolder {
 
     public Hashtable getSortedResults() {
         if(sortedResults==null)
-            sortedResults=new Hashtable();
+            sortedResults=new Hashtable<String, QueryResult>();
         return sortedResults;
     }
 
     public QueryResult getSortedResult(String sortKeys) {
         if(sortedResults==null)
             return null;
-        return (QueryResult)sortedResults.get(sortKeys);
+        return sortedResults.get(sortKeys);
     }
 
     public void putSortedResult(String sortKeys, QueryResult sortedResult) {
         if(sortedResults==null)
-            sortedResults=new Hashtable();
+            sortedResults=new Hashtable<String, QueryResult>();
         sortedResults.put(sortKeys, sortedResult);
     }
 
