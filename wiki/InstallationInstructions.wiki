@@ -11,6 +11,7 @@ Download and build the SRW Database interface software that you want.
   * [http://code.google.com/p/oclcsrwfederatedsearching Federated Searching]
 
 ==Prerequisites==
+  * Java 1.5 or higher
   * Tomcat or some other servlet engine
   * Ant
 
