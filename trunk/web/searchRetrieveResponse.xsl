@@ -6,6 +6,7 @@
 
 <xsl:import href="stdiface.xsl"/>
 <xsl:import href="dublinCoreRecord.xsl"/>
+<xsl:import href="LuceneDocument.xsl"/>
 <!--xsl:import href="ber.xsl"/>
 <xsl:import href="stdiface.xsl"/>
 <xsl:import href="dublinCoreRecord.xsl"/>
