@@ -82,13 +82,13 @@ public class SRUServerTester {
     boolean      good=true, runningAsMain=false, scanSupported=true;
     Document     explainDoc=null;
     Element      ns = null;
-    Hashtable    stylesheets=new Hashtable(), transformers=new Hashtable();
+    Hashtable<String, String> stylesheets=new Hashtable<String, String>();
+    Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
     int          numFailed=0, numTests=0, numWarns=0;
     String       baseURL=null, originalBaseURL=null;
     StringBuffer sb=new StringBuffer();
     Term         termForTesting=new Term("cql.serverChoice", "=", "dog", "-1");
-;
-    Vector       vTerms=new Vector();
+    Vector<Term> vTerms=new Vector<Term>();
 
     public SRUServerTester(String baseURL) {
         if(baseURL.endsWith("?"))
@@ -232,7 +232,7 @@ public class SRUServerTester {
             out("tests of searchRetrieve");out('\n');
             if(vTerms.size()>0) { // yay!  we have a list of good terms from the scan tests!
                 for(i=0; i<vTerms.size(); i++) {
-                    t=(Term)vTerms.elementAt(i);
+                    t=vTerms.elementAt(i);
                     if(!search(t))
                         failed();
                     if(!search(new Term(t.index, t.relation, t.term+"xxxx", "0")))
@@ -771,7 +771,7 @@ public class SRUServerTester {
                 offset=inputLine.indexOf("href=");
                 href=(inputLine.substring(inputLine.indexOf("href=")+6));
                 href=href.substring(0, href.indexOf('"'));
-                transformer=(Transformer)transformers.get(href);
+                transformer=transformers.get(href);
                 if(stylesheets.get(href)==null) try { // never seen this stylesheet before
                     out("        reading stylesheet: ");out(href);out('\n');
                     out("           from source: ");out(url.toString());out('\n');
@@ -926,6 +926,7 @@ class Term {
         this.postings=postings;
     }
     
+    @Override
     public String toString() {
         return index+"+"+relation+"+%22"+Utilities.urlEncode(term)+"%22";
     }

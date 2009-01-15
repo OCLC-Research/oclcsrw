@@ -43,11 +43,9 @@ import java.net.*;
 import java.util.Hashtable;
 import javax.swing.*;
 import javax.swing.event.*;
-import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 
@@ -141,7 +139,7 @@ public class SRWGuiClient extends JFrame implements HyperlinkListener,
   private JTextField urlField;
   private JEditorPane htmlPane;
   private String initialURL;
-  private Hashtable transformers=new Hashtable();
+  private Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
 
   public SRWGuiClient(String initialURL) {
     super("Simple Swing Browser");
@@ -190,7 +188,7 @@ public class SRWGuiClient extends JFrame implements HyperlinkListener,
                 url=new URL(url, href);
                 String stylesheetURL=url.toString();
                 System.out.println("stylesheet URL="+url.toString());
-                transformer=(Transformer)transformers.get(stylesheetURL);
+                transformer=transformers.get(stylesheetURL);
                 if(transformer==null) {
                     BufferedReader sheetIn = new BufferedReader(
                                     new InputStreamReader(

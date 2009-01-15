@@ -87,7 +87,7 @@ import org.z3950.zing.cql.CQLTermNode;
  * @author  levan
  */
 public abstract class SRWDatabase {
-    static Log log=LogFactory.getLog(SRWDatabase.class);
+    private static Log log=LogFactory.getLog(SRWDatabase.class);
 
     public static final String DEFAULT_SCHEMA = "default";
 
@@ -110,8 +110,10 @@ public abstract class SRWDatabase {
     public abstract boolean     supportsSort();
 
 
-    public static Hashtable badDbs=new Hashtable(), dbs=new Hashtable(),
-                            oldResultSets=new Hashtable(), timers=new Hashtable();
+    public static Hashtable<String, String> badDbs=new Hashtable<String, String>();
+    public static Hashtable<String, LinkedList<SRWDatabase>> dbs=new Hashtable<String, LinkedList<SRWDatabase>>();
+    public static Hashtable<String, QueryResult> oldResultSets=new Hashtable<String, QueryResult>();
+    public static Hashtable<String, Long> timers=new Hashtable<String, Long>();
 
     private static HouseKeeping houseKeeping=null;
     public static Properties srwProperties;
@@ -132,9 +134,9 @@ public abstract class SRWDatabase {
 
     protected boolean     letDefaultsBeDefault=false;
     protected CQLParser   parser = new CQLParser();
-    protected Hashtable   nameSpaces=new Hashtable(), schemas=new Hashtable(),
-                          sortTools = new Hashtable(),
-                          transformers=new Hashtable();
+    protected Hashtable<String, String> nameSpaces=new Hashtable<String, String>(), schemas=new Hashtable<String, String>();
+    protected Hashtable   sortTools = new Hashtable();
+    protected Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
     protected int         defaultNumRecs=10, defaultResultSetTTL,
                           maximumRecords=20, maxTerms = 9, position = 5;
     protected Properties  dbProperties;
@@ -305,7 +307,7 @@ public abstract class SRWDatabase {
         terms.setTerm(tl.getTerms());
         scanResponse.setTerms(terms);
 
-        Vector diagnostics = tl.getDiagnostics();
+        Vector<DiagnosticType> diagnostics = tl.getDiagnostics();
         if (diagnostics!=null && !diagnostics.isEmpty()) {
             DiagnosticType diagArray[] = new DiagnosticType[diagnostics.size()];
             diagnostics.toArray(diagArray);
@@ -352,7 +354,7 @@ public abstract class SRWDatabase {
         String resultSetID = getResultSetId(query);
         if (resultSetID!=null) { // got a cached result
             log.info("resultSetID="+resultSetID);
-            result = (QueryResult) oldResultSets.get(resultSetID);
+            result = oldResultSets.get(resultSetID);
             if (result==null)
                 return diagnostic(SRWDiagnostic.ResultSetDoesNotExist,
                         resultSetID, response);
@@ -667,7 +669,7 @@ public abstract class SRWDatabase {
         if(extraResponseData!=null)
             setExtraResponseData(response, extraResponseData);
 
-        Vector diagnostics = result.getDiagnostics();
+        Vector<DiagnosticType> diagnostics = result.getDiagnostics();
         if (diagnostics!=null && !diagnostics.isEmpty()) {
             DiagnosticType diagArray[] = new DiagnosticType[diagnostics.size()];
             diagnostics.toArray(diagArray);
@@ -697,7 +699,7 @@ public abstract class SRWDatabase {
         sb.append("        <configInfo>\n");
         sb.append("          <default type=\"maximumRecords\">").append(getMaximumRecords()).append("</default>\n");
         sb.append("          <default type=\"numberOfRecords\">").append(getNumberOfRecords()).append("</default>\n");
-        sb.append("          <default type=\"retrieveSchema\">").append((String)schemas.get("default")).append("</default>\n");
+        sb.append("          <default type=\"retrieveSchema\">").append(schemas.get("default")).append("</default>\n");
         if(dbProperties!=null) {
             String s=dbProperties.getProperty("supports");
             if(s!=null)
@@ -754,7 +756,7 @@ public abstract class SRWDatabase {
         if(badDbs.get(dbname)!=null) // we've seen this one before
             return null;
 
-        LinkedList queue=(LinkedList)dbs.get(dbname);
+        LinkedList<SRWDatabase> queue=dbs.get(dbname);
         SRWDatabase db=null;
         try {
         if(queue==null)
@@ -765,7 +767,7 @@ public abstract class SRWDatabase {
                 if(queue.isEmpty())
                     log.info("No databases available for database "+dbname);
                 else {
-                    db=(SRWDatabase)queue.removeFirst();
+                    db=queue.removeFirst();
                     if(db==null)
                         log.debug("popped a null database off the queue for database "+dbname);
                 }
@@ -777,11 +779,11 @@ public abstract class SRWDatabase {
             try{
                 while(db==null) {
                     initDB(dbname, properties, servletContext);
-                    queue=(LinkedList)dbs.get(dbname);
+                    queue=dbs.get(dbname);
                     log.debug("about to synchronize #2 on queue");
                     synchronized(queue) {
                         if(!queue.isEmpty()) // crap, someone got to it before us
-                            db=(SRWDatabase)queue.removeFirst();
+                            db=queue.removeFirst();
                     }
                 }
             log.debug("done synchronize #2 on queue");
@@ -882,12 +884,12 @@ public abstract class SRWDatabase {
     }
 
     public static Vector getResultSetIds(CQLNode root) throws SRWDiagnostic {
-        Vector resultSetIds=new Vector();
+        Vector<String> resultSetIds=new Vector<String>();
         getResultSetIds(root, resultSetIds);
         return resultSetIds;
     }
     
-    public static void getResultSetIds(CQLNode root, Vector resultSetIds) throws SRWDiagnostic {
+    public static void getResultSetIds(CQLNode root, Vector<String> resultSetIds) throws SRWDiagnostic {
         if(root instanceof CQLBooleanNode) {
             CQLBooleanNode cbn=(CQLBooleanNode)root;
             getResultSetIds(cbn.left, resultSetIds);
@@ -915,7 +917,7 @@ public abstract class SRWDatabase {
      *  classes to provide the schemaName to schemaID mapping themselves.
      */
     public String getSchemaID(String schemaName) {
-        return (String) schemas.get(schemaName);
+        return schemas.get(schemaName);
     }
 
 
@@ -1107,9 +1109,9 @@ public abstract class SRWDatabase {
         }
 
         if(!(db instanceof SRWDatabasePool)) {
-            LinkedList queue=(LinkedList)dbs.get(dbname);
+            LinkedList<SRWDatabase> queue=dbs.get(dbname);
             if(queue==null)
-                queue=new LinkedList();
+                queue=new LinkedList<SRWDatabase>();
             queue.add(db);
             if(log.isDebugEnabled())
                 log.debug(dbname+" has "+queue.size()+" copies");
@@ -1154,7 +1156,7 @@ public abstract class SRWDatabase {
                 Enumeration propertyNames;
                 String      name, schemaIdentifier, schemaName, transformerName,
                             value;
-                Vector      parms, values;
+                Vector<String> parms, values;
                 st=new StringTokenizer(xmlSchemaList, ", \t");
                 log.info("xmlSchemaList="+xmlSchemaList);
                 while(st.hasMoreTokens()) {
@@ -1169,8 +1171,8 @@ public abstract class SRWDatabase {
                         // is associated with the bare schemaName
                         transformerName=dbProperties.getProperty(schemaName);
                     }
-                    parms=new Vector();
-                    values=new Vector();
+                    parms=new Vector<String>();
+                    values=new Vector<String>();
                     propertyNames=dbProperties.propertyNames();
                     while(propertyNames.hasMoreElements()) {
                         name=(String)propertyNames.nextElement();
@@ -1211,13 +1213,13 @@ public abstract class SRWDatabase {
                 if(defaultSchema==null)
                     defaultSchema=firstSchema;
                 log.info("defaultSchema="+defaultSchema);
-                schemaIdentifier=(String)schemas.get(defaultSchema);
+                schemaIdentifier=schemas.get(defaultSchema);
                 log.info("default schemaID="+schemaIdentifier);
                 if(schemaIdentifier==null)
                     log.error("Default schema "+defaultSchema+" not loaded");
                 else {
                     schemas.put("default", schemaIdentifier);
-                    Transformer t=(Transformer)transformers.get(defaultSchema);
+                    Transformer t=transformers.get(defaultSchema);
                     if(t!=null) {
                         transformers.put("default", t);
                     }
@@ -1365,7 +1367,7 @@ sb.append("        </explain>\n");
      */
     static protected void makeUnqualifiedIndexes(Properties props) {
         Enumeration enumer=props.propertyNames();
-        Hashtable   newIndexes=new Hashtable();
+        Hashtable<String, String> newIndexes=new Hashtable<String, String>();
         int         start;
         String      name, newName, value;
         while(enumer.hasMoreElements()) {
@@ -1380,7 +1382,7 @@ sb.append("        </explain>\n");
                     }
                     else {
                         log.debug("keeping "+newName);
-                        newIndexes.put(newName, props.get(name));
+                        newIndexes.put(newName, (String)props.get(name));
                     }
                 }
             }
@@ -1388,7 +1390,7 @@ sb.append("        </explain>\n");
         enumer=newIndexes.keys();
         while(enumer.hasMoreElements()) {
             name=(String)enumer.nextElement();
-            value=(String)newIndexes.get(name);
+            value=newIndexes.get(name);
             if(value!=null) {
                 log.debug("adding: "+name+"="+value);
                 props.put(name, value);
@@ -1420,12 +1422,12 @@ sb.append("        </explain>\n");
     }
 
 
-    public static Hashtable parseElements(ExtraDataType extraData) {
-        Hashtable extraDataTable = new Hashtable();
+    public static Hashtable<String, String> parseElements(ExtraDataType extraData) {
+        Hashtable<String, String> extraDataTable = new Hashtable<String, String>();
         if (extraData!=null) {
             MessageElement[] elems = extraData.get_any();
             NameValuePair    nvp;
-            String element,  extraRequestData = elems[0].toString();
+            String extraRequestData = elems[0].toString();
             ElementParser ep = new ElementParser(extraRequestData);
             log.debug("extraRequestData="+extraRequestData);
             while (ep.hasMoreElements()) {
@@ -1439,7 +1441,7 @@ sb.append("        </explain>\n");
 
     
     public static void putDb(String dbname, SRWDatabase db) {
-        LinkedList queue=(LinkedList)dbs.get(dbname);
+        LinkedList<SRWDatabase> queue=dbs.get(dbname);
         log.debug("about to synchronize #3 on queue");
         synchronized(queue) {
             queue.add(db);
@@ -1454,7 +1456,7 @@ sb.append("        </explain>\n");
     }
 
     static public void resetTimer(String resultSetID) {
-        QueryResult qr=(QueryResult)oldResultSets.get(resultSetID);
+        QueryResult qr=oldResultSets.get(resultSetID);
         timers.put(resultSetID, new Long(System.currentTimeMillis() + (qr.getResultSetIdleTime()*1000)));
     }
 
@@ -1525,6 +1527,7 @@ sb.append("        </explain>\n");
     }
     
 
+    @Override
     public String toString() {
         StringBuffer sb=new StringBuffer();
         sb.append("Database ").append(dbname).append(" of type ")
@@ -1538,7 +1541,7 @@ sb.append("        </explain>\n");
         if (schemaID!=null && !rec.getRecordSchemaID().equals(schemaID)) {
             log.debug("transforming to "+schemaID);
             // They must have specified a transformer
-            Transformer t = (Transformer)transformers.get(schemaID);
+            Transformer t = transformers.get(schemaID);
             if (t==null) {
                 log.error("can't transform record in schema "+rec.getRecordSchemaID());
                 log.error("record not available in schema "+schemaID);

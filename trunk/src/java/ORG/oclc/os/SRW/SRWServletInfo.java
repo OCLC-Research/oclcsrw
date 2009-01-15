@@ -51,11 +51,11 @@ import org.apache.commons.logging.LogFactory;
 public class SRWServletInfo {
     public static final boolean isDebug=false;
     public static Log log=LogFactory.getLog(SRWServletInfo.class);
-    public static Hashtable realXsls=new Hashtable();
+    public static Hashtable<String, String> realXsls=new Hashtable<String, String>();
     public static String srwHome, tomcatHome, webappHome;
 
     private boolean      madeIndexDotHtml=false, makeIndexDotHtml=false;
-    private Hashtable    extensions=new Hashtable(), namespaces=new Hashtable();
+    private Hashtable<String, String> extensions=new Hashtable<String, String>(), namespaces=new Hashtable<String, String>();
     public int           pathInfoIndex=1, resultSetIdleTime=300; // time in seconds
     private Properties   properties=new Properties();
     public String        databaseURL, defaultDatabase, indexDotHtmlLocation=null,
@@ -65,11 +65,11 @@ public class SRWServletInfo {
     }
 
     
-    private static void buildDbList(Properties properties, Vector dbVector, String path) {
+    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, String path) {
         buildDbList(properties, dbVector, path, null);
     }
 
-    private static void buildDbList(Properties properties, Vector dbVector, String path, String remote) {
+    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, String path, String remote) {
         Enumeration enumer=properties.propertyNames();
         String      fileName, dbHome, dbName, description, hidden=null, t;
         while(enumer.hasMoreElements()) {
@@ -408,7 +408,7 @@ public class SRWServletInfo {
         ps.println("</table>");
         ps.println("</div>");
         ps.println("<table class=\"formtable\">");
-        Vector dbVector=new Vector();
+        Vector<DbEntry> dbVector=new Vector<DbEntry>();
         buildDbList(properties, dbVector, path);
         Object[] dbList=dbVector.toArray();
         Arrays.sort(dbList);

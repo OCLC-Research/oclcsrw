@@ -5,8 +5,6 @@ Expression licensePrefix is undefined on line 5, column 3 in Templates/Licenses/
 
 package ORG.oclc.os.SRW;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.Enumeration;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
@@ -20,7 +18,7 @@ import javax.servlet.http.HttpServletRequestWrapper;
  */
 public class LateContentParsingHttpServletRequestWrapper extends HttpServletRequestWrapper {
     boolean hasParametersAlready;
-    Hashtable parms=new Hashtable();
+    Hashtable<String, Vector<String>> parms=new Hashtable<String, Vector<String>>();
 
     public LateContentParsingHttpServletRequestWrapper(HttpServletRequest request, String content) {
         super(request);
@@ -44,6 +42,7 @@ public class LateContentParsingHttpServletRequestWrapper extends HttpServletRequ
         }
     }
 
+    @Override
     public String getParameter(String name) {
         if(hasParametersAlready)
             return super.getParameter(name);
@@ -53,25 +52,27 @@ public class LateContentParsingHttpServletRequestWrapper extends HttpServletRequ
         return (String)v.get(0);
     }
 
+    @Override
     public Enumeration getParameterNames() {
         if(hasParametersAlready)
             return super.getParameterNames();
         return parms.keys();
     }
 
+    @Override
     public String[] getParameterValues(String name) {
         if(hasParametersAlready)
             return super.getParameterValues(name);
-        Vector v=(Vector)parms.get(name);
+        Vector<String> v=parms.get(name);
         if(v==null)
             return null;
         return (String[])v.toArray();
     }
 
     private void add(String name, String value) {
-        Vector v=(Vector)parms.get(name);
+        Vector<String> v=parms.get(name);
         if(v==null) {
-            v=new Vector();
+            v=new Vector<String>();
             parms.put(name, v);
         }
         v.add(value);
