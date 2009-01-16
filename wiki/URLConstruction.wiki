@@ -1,7 +1,6 @@
-#summary One-sentence summary of this page.
+#summary Describes how to build SRU URLs.
 
-==URL Construction==
-A typical SRW URL looks like this: http://localhost:8080/SRW/search/test?query=dog&maximumRecords=1. 
+A typical SRU URL looks like this: http://localhost:8080/SRW/search/test?query=dog&maximumRecords=1. 
 
 The first part points at your host and port. After the slash is the name of the Tomcat webapp that should process the request; SRW in this case. If you changed the name of the SRW.war file before Tomcat deployed it, then the webapp will have a different name. (If you changed the name to dspace-srw.war, then the webapp is named dspace-srw and the URL becomes http://localhost:8080/dspace-srw/search/test?query=dog&maximumRecords=1. 
 
