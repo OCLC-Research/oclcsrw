@@ -39,3 +39,12 @@ http://oclcsrw.googlecode.com/svn/wiki/images/TestSearchResponse.jpg
 [http://localhost:8080/SRW/search/test?scanClause=dog] should get you something like this:
 
 http://oclcsrw.googlecode.com/svn/wiki/images/TestScanResponse.jpg
+
+===Test Failure Modes===
+"Cannot find server or DNS Error"
+You've specified the wrong host or port or Tomcat isn't running. 
+
+"The download of the specified resource has failed"
+The SRW Servlet failed during initialization. The Tomcat log should contain information explaining the failure. If the servlet was unable to find the SRWServer.props file, you will see in the log several attempts to open the file and finally a `FileNotFoundException`. 
+
+I am sure there are other failure modes during testing. I'll document them as they are reported. 
