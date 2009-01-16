@@ -36,6 +36,11 @@ http://oclcsrw.googlecode.com/svn/wiki/images/TestExplainResponse.jpg
 
 http://oclcsrw.googlecode.com/svn/wiki/images/TestSearchResponse.jpg
 
+[http://localhost:8080/SRW/search/test?scanClause=dog] should get you something like this:
+
+http://oclcsrw.googlecode.com/svn/wiki/images/TestScanResponse.jpg
+
+
 ===Configuration Files===
 The two primary configuration files, web.xml and SRWServer.props, are in the `<SRW>/WEB-INF` and `<SRW>/WEB-INF/classes` directories respectively. web.xml controls the interaction between Tomcat and the SRW servlet. SRWServer.props controls the behavior of the servlet.
 
