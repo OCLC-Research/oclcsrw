@@ -8,4 +8,4 @@ Everything after the webapp part is compared with the patterns specified in the 
 
 After the pattern comes the name of the database to be searched. If this is omitted, then the default database, as specified in your SRWServer.props file, will be searched. As originally deployed, the DSpace database is the default and can be omitted from the URL. 
 
-Finally, comes a question-mark and the SRW parameters. Information about SRW can be found at http://lcweb.loc.gov/z3950/agency/zing/srw 
+Finally, comes a question-mark and the SRW parameters. Information about SRW can be found at http://loc.gov/standards/sru
