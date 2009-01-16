@@ -32,62 +32,6 @@ If you need to build the SRW.war file to deploy the SRW service, then enter "ant
 
 You can get the latest version of the SRW Server code by entering "ant checkout" at the command line. This will get the latest copy of the code from our CVS repository. (See Concurrent Versions System for more information about CVS.) After getting the new code, you will want to run ant to build the .jar and .war files. 
 
-==Testing==
-The URL http://localhost:8080/SRW/search/test?query=dog&maximumRecords=1 will cause a query to be sent to the SRW test database. (You may have to change the host and port to get to your copy of Tomcat.) Any searches against the test database will report the creation of a result set with one record in it. The URL above also requests the return of one record. 
-
-If the installation is correct, then you will see something like this in the response: 
-
- 
-
-A Project of OCLC Research
- OCLC Online Computer Library Center
- 
-Result of search: dog
- 
- 
-
- 
-
-Search Results 
-Result Set Identifier: 7h5pcj
-Records found: 1
- 
-Records 
- 
- 
-Position: 1 Schema: Dublin Core 
-
-srw_dc:dc.dc:identifier: 
- test001
- 
-srw_dc:dc.dc:creator: 
- Ralph LeVan
- 
-srw_dc:dc.date: 
- 2003-08-25
- 
-srw_dc:dc.dc:title: 
- SRW Test Record
- 
-
- 
- 
- 
-
-Home
-
-
- 
-
-===Test Failure Modes===
-"Cannot find server or DNS Error"
-You've specified the wrong host or port or Tomcat isn't running. 
-
-"The download of the specified resource has failed"
-The SRW Servlet failed during initialization. The Tomcat log should contain information explaining the failure. If the servlet was unable to find the SRWServer.props file, you will see in the log several attempts to open the file and finally a FileNotFoundException. 
-
-I am sure there are other failure modes during testing. I'll document them as they are reported. 
-
 ==URL Construction==
 A typical SRW URL looks like this: http://localhost:8080/SRW/search/test?query=dog&maximumRecords=1. 
 
