@@ -6,6 +6,9 @@ This file contains the list of databases supported and configuration information
 
 ==Common Configuration Information==
 ===SRW.Context===
+This information is only used in constructing the stylesheet reference in an SRU response.  Normally, the SRW server can figure out its own context name, but sometimes you want to find those stylesheets in a different context (e.g. when you're running more than one SRW server in the same Tomcat).  The optional parameter lets you specify that context.
+`SRW.Context=identities`
+
 ===resultSetIdleTime===
 ===makeIndex.html===
 ===index.html===
