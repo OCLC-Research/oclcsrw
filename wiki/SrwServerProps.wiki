@@ -1,13 +1,17 @@
 #SRW/SRU Server Configuration File Details.
 
-= Introduction =
+=SRWServer.props=
 
-Add your content here.
+This file contains the list of databases supported and configuration information common to all databases.
 
+==Common Configuration Information==
+===SRW.Context===
+===resultSetIdleTime===
+===makeIndex.html===
+===index.html===
+===SRU Input Parameter Extensions===
 
-= Details =
-
-Add your content here.  Format your content with:
-  * Text in *bold* or _italic_
-  * Headings, paragraphs, and lists
-  * Automatic links to other wiki pages
+==Databases==
+===default.database===
+===Individual Databases===
+Each database is represented by a triple of information
