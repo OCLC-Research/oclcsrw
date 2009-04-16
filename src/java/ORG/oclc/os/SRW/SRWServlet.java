@@ -126,6 +126,7 @@ public class SRWServlet extends AxisServlet {
      * Cached path to JWS output directory
      */
     private String jwsClassDir = null;
+@Override
     protected String getJWSClassDir() { return jwsClassDir; }
 
     protected SRWServletInfo srwInfo=null;
@@ -142,6 +143,7 @@ public class SRWServlet extends AxisServlet {
     /**
      * Initialization method.
      */
+@Override
     public void init() throws ServletException {
         srwInfo=new SRWServletInfo();
         srwInfo.init(getServletConfig());
@@ -183,6 +185,7 @@ public class SRWServlet extends AxisServlet {
         }
     }
 
+@Override
     protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         MessageContext msgContext = createMessageContext(getEngine(), request, response);
         if(!srwInfo.setSRWStuff(request, response, msgContext)) {
@@ -209,6 +212,7 @@ public class SRWServlet extends AxisServlet {
     }
 
 
+@Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         MessageContext msgContext = createMessageContext(getEngine(), request, response);
             if(!srwInfo.setSRWStuff(request, response, msgContext)) {
@@ -244,6 +248,7 @@ public class SRWServlet extends AxisServlet {
      * @throws ServletException
      * @throws IOException
      */
+@Override
     public void doGet(HttpServletRequest request, HttpServletResponse response)
         throws ServletException, IOException {
         servletLog.debug("Enter: doGet()");
@@ -299,7 +304,7 @@ public class SRWServlet extends AxisServlet {
                 doExplain=true;
 
             boolean hasNoPath = (pathInfo == null || pathInfo.equals(""));
-            if (!wsdlRequested && !listRequested && hasNoPath) {
+            if (!wsdlRequested && !listRequested && hasNoPath && srwInfo.defaultDatabase==null) {
                 // If the user requested the servlet (i.e. /axis/servlet/AxisServlet)
                 // with no service name, present the user with a list of deployed
                 // services to be helpful
@@ -438,6 +443,7 @@ public class SRWServlet extends AxisServlet {
      * in the process
      * @param fault what went wrong.
      */
+@Override
     protected void processAxisFault(AxisFault fault) {
         //log the fault
         Element runtimeException = fault.lookupFaultDetail(
@@ -786,6 +792,7 @@ public class SRWServlet extends AxisServlet {
      * @throws ServletException trouble
      * @throws IOException different trouble
      */
+@Override
      public void doPost(HttpServletRequest req, HttpServletResponse res)
         throws ServletException, IOException
     {
@@ -1029,6 +1036,7 @@ public class SRWServlet extends AxisServlet {
      * @param af Axis Fault
      * @return HTTP Status code.
      */
+@Override
     protected int getHttpServletResponseStatus(AxisFault af) {
         // TODO: Should really be doing this with explicit AxisFault
         // subclasses... --Glen
@@ -1199,6 +1207,7 @@ public class SRWServlet extends AxisServlet {
      * by derived class.
      * @return directory for JWS files
      */
+@Override
     protected String getDefaultJWSClassDir() {
         return (getWebInfPath() == null)
                ? null  // ??? what is a good FINAL default for WebLogic?
@@ -1390,7 +1399,11 @@ public class SRWServlet extends AxisServlet {
                 if("APP".equals(req.getAttribute("service"))) {
                     int start=soapResponse.indexOf("<recordData");
                     if(start>=0) {
-                        resp.setContentType("text/xml");
+                        String mimeType=(String)req.getAttribute("mime-type");
+                        if(mimeType!=null)
+                            resp.setContentType(mimeType);
+                        else
+                            resp.setContentType("text/xml");
                         sos=resp.getOutputStream();
                         start=soapResponse.indexOf('<', start+1);
                         int stop=soapResponse.indexOf("</recordData>", start);
