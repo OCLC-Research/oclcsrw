@@ -21,16 +21,14 @@
 
 package ORG.oclc.os.SRW;
 import gov.loc.www.zing.srw.ScanRequestType;
-import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
-import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 
 import java.util.LinkedList;
 import java.util.Properties;
 import java.util.StringTokenizer;
 
-import javax.servlet.ServletException;
 
+import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.z3950.zing.cql.CQLTermNode;
@@ -62,6 +60,7 @@ public class SRWDatabasePool extends SRWDatabase {
         dbs.put(dbname, queue);
     }
 
+    @Override
     public void addRenderer(String schemaName, String schemaID, Properties props) throws InstantiationException {
         log.error("we shouldn't have been called directly!");
     }
@@ -87,7 +86,7 @@ public class SRWDatabasePool extends SRWDatabase {
         return null;
     }
 
-    public void init(String dbname, String srwHome, String dbHome, String dbPropertiesFileName, java.util.Properties dbProperties) throws Exception {
+    public void init(String dbname, String srwHome, String dbHome, String dbPropertiesFileName, java.util.Properties dbProperties, HttpServletRequest request) throws Exception {
         dbList=dbProperties.getProperty("DBList");
         this.dbname=dbname;
         addMoreDbs();
