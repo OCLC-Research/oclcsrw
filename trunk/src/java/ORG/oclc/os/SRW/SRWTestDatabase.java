@@ -24,6 +24,7 @@ package ORG.oclc.os.SRW;
 import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import java.util.Properties;
+import javax.servlet.http.HttpServletRequest;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.z3950.zing.cql.CQLTermNode;
@@ -36,6 +37,7 @@ public class SRWTestDatabase extends SRWDatabase {
     Log log=LogFactory.getLog(SRWTestDatabase.class);
     String schemaID="info:srw/schema/1/dc-v1.1";
 
+    @Override
     public void addRenderer(String schemaName, String schemaID, Properties props)
       throws InstantiationException {
     }
@@ -44,6 +46,7 @@ public class SRWTestDatabase extends SRWDatabase {
         return new TestTermList();
     }
     
+    @Override
     public String getDatabaseInfo() {
         StringBuffer sb=new StringBuffer();
         sb.append("        <databaseInfo>\n")
@@ -76,10 +79,12 @@ public class SRWTestDatabase extends SRWDatabase {
         return sb.toString();
     }
 
+    @Override
     public int getMaximumRecords() {
         return maximumRecords;
     }
 
+    @Override
     public int getNumberOfRecords() {
         return defaultNumRecs;
     }
@@ -89,10 +94,12 @@ public class SRWTestDatabase extends SRWDatabase {
         return new TestQueryResult();
     }
 
+    @Override
     public String getSchemaID(String schemaName) {
         return schemaID;
     }
     
+    @Override
     public String getSchemaInfo() {
         StringBuffer sb=new StringBuffer();
         sb.append("        <schemaInfo>\n")
@@ -105,12 +112,13 @@ public class SRWTestDatabase extends SRWDatabase {
         return sb.toString();
     }
     
+    @Override
     public boolean hasaConfigurationFile() {
         return false;
     }
 
     public void init(String dbname, String srwHome, String dbHome,
-      String dbPropertiesFileName, Properties dbProperties) {
+      String dbPropertiesFileName, Properties dbProperties, HttpServletRequest request) {
         log.debug("entering SRWTestDatabase.init, dbname="+dbname);
         super.initDB(dbname,  srwHome, dbHome, dbPropertiesFileName, dbProperties);
         log.debug("leaving SRWTestDatabase.init");
