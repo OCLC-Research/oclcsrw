@@ -51,7 +51,7 @@ public class ExplainSoapBindingImpl implements gov.loc.www.zing.srw.interfaces.E
                 record.setRecordPacking("xml");
                 Document domDoc=XMLUtils.newDocument(
                     new InputSource(
-                    new StringReader(db.getExplainRecord())));
+                    new StringReader(db.getExplainRecord(null))));
                 MessageElement elems[]=new MessageElement[1];
                 elems[0]=new MessageElement(
                     domDoc.getDocumentElement());
@@ -61,7 +61,7 @@ public class ExplainSoapBindingImpl implements gov.loc.www.zing.srw.interfaces.E
                 record.setRecordPacking("string");
                 MessageElement elems[]=new MessageElement[1];
                 elems[0]=new MessageElement();
-                elems[0].addTextNode(db.getExplainRecord());
+                elems[0].addTextNode(db.getExplainRecord(null));
                 frag.set_any(elems);
             }
             record.setRecordData(frag);
