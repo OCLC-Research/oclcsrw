@@ -219,7 +219,7 @@ public class Utilities {
             if(request.getMaximumRecords()!=null)
                 sru.append('&').append("maximumRecords=").append(request.getMaximumRecords().toString());
             if(request.getQuery()!=null)
-                sru.append('&').append("query=\"").append(urlEncode(request.getQuery())).append('"');
+                sru.append('&').append("query=").append(urlEncode(request.getQuery()));
             if(request.getRecordPacking()!=null)
                 sru.append('&').append("recordPacking=").append(request.getRecordPacking());
             if(request.getRecordSchema()!=null)
