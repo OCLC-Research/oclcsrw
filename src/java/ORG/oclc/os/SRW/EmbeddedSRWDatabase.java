@@ -149,7 +149,7 @@ public class EmbeddedSRWDatabase {
                 while(keys.hasMoreElements()) {
                     key=(String)keys.nextElement();
                     if(key.equals("explain")) {
-                        System.out.println(db.getExplainRecord());
+                        System.out.println(db.getExplainRecord(null));
                     }
                     else if(key.equals("help")) {
                         help();
