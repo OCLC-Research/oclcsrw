@@ -105,7 +105,8 @@ public abstract class SRWDatabase {
 
     public abstract void        init(String dbname, String srwHome,
                                   String dbHome, String dbPropertiesFileName,
-                                  Properties dbProperties) throws Exception;
+                                  Properties dbProperties,
+                                  HttpServletRequest request) throws Exception;
 
     public abstract boolean     supportsSort();
 
@@ -129,7 +130,7 @@ public abstract class SRWDatabase {
     public HttpHeaderSetter httpHeaderSetter=null;
     public SearchRetrieveRequestType searchRequest;
     public SearchRetrieveResponseType response;
-    public String  databaseTitle, dbname, explainStyleSheet=null,
+    public String  baseURL=null, databaseTitle, dbname, explainStyleSheet=null,
                    scanStyleSheet=null, searchStyleSheet=null;
 
     protected boolean     letDefaultsBeDefault=false;
@@ -212,6 +213,223 @@ public abstract class SRWDatabase {
         log.info("added transformer for schemaName "+schemaName+", and schemaID "+schemaID);
         return t;
     }
+
+    public static synchronized void createDB(final String dbname, Properties properties)
+      throws InstantiationException {
+        createDB(dbname, properties, null, null);
+    }
+
+    public static synchronized void createDB(final String dbname, Properties properties, String context, HttpServletRequest request)
+      throws InstantiationException {
+        log.debug("Enter: initDB, dbname="+dbname);
+        String dbn="db."+dbname;
+
+        srwProperties=properties;
+        srwHome=properties.getProperty("SRW.Home");
+        servletContext=context;
+        if(srwHome!=null && !srwHome.endsWith("/"))
+            srwHome=srwHome+"/";
+        log.debug("SRW.Home="+srwHome);
+        Properties dbProperties=new Properties();
+        String dbHome=properties.getProperty(dbn+".home"),
+               dbPropertiesFileName=null;
+        if(dbHome!=null) {
+            if(!dbHome.endsWith("/"))
+                dbHome=dbHome+"/";
+            log.debug("dbHome="+dbHome);
+        }
+
+        String className=properties.getProperty(dbn+".class");
+        log.debug("className="+className);
+        if(className==null) {
+            // let's see if there's a fallback database to use
+            className=properties.getProperty("db.default.class");
+            if(className==null)
+                throw new InstantiationException("No "+
+                    dbn+".class entry in properties file");
+            dbn="db.default";
+        }
+        if(className.equals("ORG.oclc.os.SRW.SRWPearsDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWPearsDatabase has been replaced with ORG.oclc.os.SRW.Pears.SRWPearsDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.Pears.SRWPearsDatabase";
+            log.debug("new className="+className);
+        }
+        else if(className.equals("ORG.oclc.os.SRW.SRWRemoteDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWRemoteDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase";
+            log.debug("new className="+className);
+        }
+        else if(className.equals("ORG.oclc.os.SRW.Pears.SRWRemoteDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.Pears.SRWRemoteDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase";
+            log.debug("new className="+className);
+        }
+        else if(className.equals("ORG.oclc.os.SRW.SRWMergeDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWMergeDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase";
+            log.debug("new className="+className);
+        }
+        else if(className.equals("ORG.oclc.os.SRW.Pears.SRWMergeDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.Pears.SRWMergeDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase";
+            log.debug("new className="+className);
+        }
+        else if(className.equals("ORG.oclc.os.SRW.SRWDLuceneDatabase")) {
+            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWLuceneDatabase has been replaced with ORG.oclc.os.SRW.DSpaceLucene.SRWLuceneDatabase");
+            log.info("              Please correct the server's properties file");
+            className="ORG.oclc.os.SRW.DSpaceLucene.SRWLuceneDatabase";
+            log.debug("new className="+className);
+        }
+        SRWDatabase db=null;
+        try {
+            log.debug("creating class "+className);
+            Class  dbClass=Class.forName(className);
+            log.debug("creating instance of class "+dbClass);
+            db=(SRWDatabase)dbClass.newInstance();
+            log.debug("class created");
+        }
+        catch(Exception e) {
+            log.error("Unable to create Database class "+className+
+                " for database "+dbname);
+            log.error(e, e);
+            throw new InstantiationException(e.getMessage());
+        }
+
+        dbPropertiesFileName=properties.getProperty(dbn+".configuration");
+        if(db.hasaConfigurationFile() || dbPropertiesFileName!=null) {
+            if(dbPropertiesFileName==null) {
+                throw new InstantiationException("No "+dbn+
+                    ".configuration entry in properties file");
+            }
+
+            try {
+                log.debug("Reading database configuration file: "+
+                    dbPropertiesFileName);
+                InputStream is=Utilities.openInputStream(dbPropertiesFileName, dbHome, srwHome);
+                dbProperties.load(is);
+                is.close();
+            }
+            catch(java.io.FileNotFoundException e) {
+                log.error("Unable to open database configuration file!");
+                log.error(e);
+            }
+            catch(Exception e) {
+                log.error("Unable to load database configuration file!");
+                log.error(e, e);
+            }
+            makeUnqualifiedIndexes(dbProperties);
+            try {
+                db.init(dbname, srwHome, dbHome, dbPropertiesFileName, dbProperties, request);
+            }
+            catch(InstantiationException e) {
+                throw e;
+            }
+            catch(Exception e) {
+                log.error("Unable to initialize database "+dbname);
+                log.error(e, e);
+                throw new InstantiationException(e.getMessage());
+            }
+            if(request!=null) {
+                StringBuilder urlStr=new StringBuilder("http://").append(request.getServerName());
+                if(request.getServerPort()!=80)
+                    urlStr.append(":").append(request.getServerPort());
+                urlStr.append('/');
+                String contextPath=request.getContextPath();
+                if(contextPath!=null && contextPath.length()>1) {
+                    urlStr.append(contextPath.substring(1));
+                }
+                int pathInfoIndex=Integer.parseInt(
+                    properties.getProperty("pathInfoIndex", "1"));
+                String path=request.getPathInfo();
+                StringBuilder newPath=new StringBuilder();
+                if(path!=null) {
+                    StringTokenizer st=new StringTokenizer(path, "/");
+                    for(int i=0; st.hasMoreTokens(); i++)
+                        if(i==pathInfoIndex-1) {
+                            newPath.append('/').append(dbname);
+                            st.nextToken();
+                        }
+                        else
+                            newPath.append('/').append(st.nextToken());
+                }
+                urlStr.append(request.getServletPath()).append(newPath.toString());
+                db.baseURL=urlStr.toString();
+            }
+            String temp=dbProperties.getProperty("maximumRecords");
+            if(temp==null)
+                temp=dbProperties.getProperty("configInfo.maximumRecords");
+            if(temp!=null) {
+                try {
+                    db.setMaximumRecords(Integer.parseInt(temp));
+                }
+                catch(NumberFormatException e) {
+                    log.error("bad value for maximumRecords: \""+temp+"\"");
+                    log.error("maximumRecords parameter ignored");
+                }
+            }
+            temp=dbProperties.getProperty("numberOfRecords");
+            if(temp==null)
+                temp=dbProperties.getProperty("configInfo.numberOfRecords");
+            if(temp!=null) {
+                try {
+                    db.setNumberOfRecords(Integer.parseInt(temp));
+                }
+                catch(NumberFormatException e) {
+                    log.error("bad value for numberOfRecords: \""+temp+"\"");
+                    log.error("numberOfRecords parameter ignored");
+                }
+            }
+            temp=dbProperties.getProperty("defaultResultSetTTL");
+            if(temp==null)
+                temp=dbProperties.getProperty("configInfo.resultSetTTL");
+            if(temp!=null) {
+                try {
+                    db.setDefaultResultSetTTL(Integer.parseInt(temp));
+                }
+                catch(NumberFormatException e) {
+                    log.error("bad value for defaultResultSetTTL: \""+temp+"\"");
+                    log.error("defaultResultSetTTL parameter ignored");
+                }
+            }
+            else
+                db.setDefaultResultSetTTL(300);
+
+            temp=dbProperties.getProperty("letDefaultsBeDefault");
+            if(temp!=null && temp.equals("true"))
+                db.letDefaultsBeDefault=true;
+        }
+        else { // default settings
+            try {
+                db.init(dbname, srwHome, dbHome, "(no database configuration file specified)", dbProperties, request);
+            }
+            catch(Exception e) {
+                log.error("Unable to create Database class "+className+
+                    " for database "+dbname);
+                log.error(e, e);
+                throw new InstantiationException(e.getMessage());
+            }
+            db.setDefaultResultSetTTL(300);
+            log.info("no configuration file needed or specified");
+        }
+
+        if(!(db instanceof SRWDatabasePool)) {
+            LinkedList<SRWDatabase> queue=dbs.get(dbname);
+            if(queue==null)
+                queue=new LinkedList<SRWDatabase>();
+            queue.add(db);
+            if(log.isDebugEnabled())
+                log.debug(dbname+" has "+queue.size()+" copies");
+            dbs.put(dbname, queue);
+        }
+        log.debug("Exit: initDB");
+        return;
+    }
+
 
     public boolean delete(String recordKey) {
         throw new UnsupportedOperationException("Not yet implemented");
@@ -666,6 +884,7 @@ public abstract class SRWDatabase {
         } // if(postingsCount>0)
 
         String extraResponseData = getExtraResponseData(result, request);
+        log.info("extraResponseData="+extraResponseData);
         if(extraResponseData!=null)
             setExtraResponseData(response, extraResponseData);
 
@@ -749,9 +968,9 @@ public abstract class SRWDatabase {
 
 
     public static SRWDatabase getDB(String dbname, Properties properties) {
-        return getDB(dbname, properties, null);
+        return getDB(dbname, properties, null, null);
     }
-    public static SRWDatabase getDB(String dbname, Properties properties, String servletContext) {
+    public static SRWDatabase getDB(String dbname, Properties properties, String servletContext, HttpServletRequest request) {
         log.debug("enter SRWDatabase.getDB");
         if(badDbs.get(dbname)!=null) // we've seen this one before
             return null;
@@ -778,7 +997,7 @@ public abstract class SRWDatabase {
             log.info("creating a database for "+dbname);
             try{
                 while(db==null) {
-                    initDB(dbname, properties, servletContext);
+                    createDB(dbname, properties, servletContext, request);
                     queue=dbs.get(dbname);
                     log.debug("about to synchronize #2 on queue");
                     synchronized(queue) {
@@ -821,11 +1040,11 @@ public abstract class SRWDatabase {
     }
 
 
-    public String getExplainRecord() {
-        if(explainRecord==null)
-            makeExplainRecord(null);
-        return explainRecord;
-    }
+//    public String getExplainRecord() {
+//        if(explainRecord==null)
+//            makeExplainRecord(null);
+//        return explainRecord;
+//    }
 
 
     public String getExplainRecord(HttpServletRequest request) {
@@ -931,197 +1150,6 @@ public abstract class SRWDatabase {
     }
 
 
-    public static synchronized void initDB(final String dbname, Properties properties)
-      throws InstantiationException {
-        initDB(dbname, properties, null);
-    }
-
-    public static synchronized void initDB(final String dbname, Properties properties, String context)
-      throws InstantiationException {
-        log.debug("Enter: initDB, dbname="+dbname);
-        String dbn="db."+dbname;
-
-        srwProperties=properties;
-        srwHome=properties.getProperty("SRW.Home");
-        servletContext=context;
-        if(srwHome!=null && !srwHome.endsWith("/"))
-            srwHome=srwHome+"/";
-        log.debug("SRW.Home="+srwHome);
-        Properties dbProperties=new Properties();
-        String dbHome=properties.getProperty(dbn+".home"),
-               dbPropertiesFileName=null;
-        if(dbHome!=null) {
-            if(!dbHome.endsWith("/"))
-                dbHome=dbHome+"/";
-            log.debug("dbHome="+dbHome);
-        }
-
-        String className=properties.getProperty(dbn+".class");
-        log.debug("className="+className);
-        if(className==null) {
-            // let's see if there's a fallback database to use
-            className=properties.getProperty("db.default.class");
-            if(className==null)
-                throw new InstantiationException("No "+
-                    dbn+".class entry in properties file");
-            dbn="db.default";
-        }
-        if(className.equals("ORG.oclc.os.SRW.SRWPearsDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWPearsDatabase has been replaced with ORG.oclc.os.SRW.Pears.SRWPearsDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.Pears.SRWPearsDatabase";
-            log.debug("new className="+className);
-        }
-        else if(className.equals("ORG.oclc.os.SRW.SRWRemoteDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWRemoteDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase";
-            log.debug("new className="+className);
-        }
-        else if(className.equals("ORG.oclc.os.SRW.Pears.SRWRemoteDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.Pears.SRWRemoteDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.ParallelSearching.SRWRemoteDatabase";
-            log.debug("new className="+className);
-        }
-        else if(className.equals("ORG.oclc.os.SRW.SRWMergeDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWMergeDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase";
-            log.debug("new className="+className);
-        }
-        else if(className.equals("ORG.oclc.os.SRW.Pears.SRWMergeDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.Pears.SRWMergeDatabase has been replaced with ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.ParallelSearching.SRWMergeDatabase";
-            log.debug("new className="+className);
-        }
-        else if(className.equals("ORG.oclc.os.SRW.SRWDLuceneDatabase")) {
-            log.info("** Warning ** the class ORG.oclc.os.SRW.SRWLuceneDatabase has been replaced with ORG.oclc.os.SRW.DSpaceLucene.SRWLuceneDatabase");
-            log.info("              Please correct the server's properties file");
-            className="ORG.oclc.os.SRW.DSpaceLucene.SRWLuceneDatabase";
-            log.debug("new className="+className);
-        }
-        SRWDatabase db=null;
-        try {
-            log.debug("creating class "+className);
-            Class  dbClass=Class.forName(className);
-            log.debug("creating instance of class "+dbClass);
-            db=(SRWDatabase)dbClass.newInstance();
-            log.debug("class created");
-        }
-        catch(Exception e) {
-            log.error("Unable to create Database class "+className+
-                " for database "+dbname);
-            log.error(e, e);
-            throw new InstantiationException(e.getMessage());
-        }
-
-        dbPropertiesFileName=properties.getProperty(dbn+".configuration");
-        if(db.hasaConfigurationFile() || dbPropertiesFileName!=null) {
-            if(dbPropertiesFileName==null) {
-                throw new InstantiationException("No "+dbn+
-                    ".configuration entry in properties file");
-            }
-
-            try {
-                log.debug("Reading database configuration file: "+
-                    dbPropertiesFileName);
-                InputStream is=Utilities.openInputStream(dbPropertiesFileName, dbHome, srwHome);
-                dbProperties.load(is);
-                is.close();
-            }
-            catch(java.io.FileNotFoundException e) {
-                log.error("Unable to open database configuration file!");
-                log.error(e);
-            }
-            catch(Exception e) {
-                log.error("Unable to load database configuration file!");
-                log.error(e, e);
-            }
-            makeUnqualifiedIndexes(dbProperties);
-            try {
-                db.init(dbname, srwHome, dbHome, dbPropertiesFileName, dbProperties);
-            }
-            catch(InstantiationException e) {
-                throw e;
-            }
-            catch(Exception e) {
-                log.error("Unable to initialize database "+dbname);
-                log.error(e, e);
-                throw new InstantiationException(e.getMessage());
-            }
-            String temp=dbProperties.getProperty("maximumRecords");
-            if(temp==null)
-                temp=dbProperties.getProperty("configInfo.maximumRecords");
-            if(temp!=null) {
-                try {
-                    db.setMaximumRecords(Integer.parseInt(temp));
-                }
-                catch(NumberFormatException e) {
-                    log.error("bad value for maximumRecords: \""+temp+"\"");
-                    log.error("maximumRecords parameter ignored");
-                }
-            }
-            temp=dbProperties.getProperty("numberOfRecords");
-            if(temp==null)
-                temp=dbProperties.getProperty("configInfo.numberOfRecords");
-            if(temp!=null) {
-                try {
-                    db.setNumberOfRecords(Integer.parseInt(temp));
-                }
-                catch(NumberFormatException e) {
-                    log.error("bad value for numberOfRecords: \""+temp+"\"");
-                    log.error("numberOfRecords parameter ignored");
-                }
-            }
-            temp=dbProperties.getProperty("defaultResultSetTTL");
-            if(temp==null)
-                temp=dbProperties.getProperty("configInfo.resultSetTTL");
-            if(temp!=null) {
-                try {
-                    db.setDefaultResultSetTTL(Integer.parseInt(temp));
-                }
-                catch(NumberFormatException e) {
-                    log.error("bad value for defaultResultSetTTL: \""+temp+"\"");
-                    log.error("defaultResultSetTTL parameter ignored");
-                }
-            }
-            else
-                db.setDefaultResultSetTTL(300);
-
-            temp=dbProperties.getProperty("letDefaultsBeDefault");
-            if(temp!=null && temp.equals("true"))
-                db.letDefaultsBeDefault=true;
-        }
-        else { // default settings
-            try {
-                db.init(dbname, srwHome, dbHome, "(no database configuration file specified)", dbProperties);
-            }
-            catch(Exception e) {
-                log.error("Unable to create Database class "+className+
-                    " for database "+dbname);
-                log.error(e, e);
-                throw new InstantiationException(e.getMessage());
-            }
-            db.setDefaultResultSetTTL(300);
-            log.info("no configuration file needed or specified");
-        }
-
-        if(!(db instanceof SRWDatabasePool)) {
-            LinkedList<SRWDatabase> queue=dbs.get(dbname);
-            if(queue==null)
-                queue=new LinkedList<SRWDatabase>();
-            queue.add(db);
-            if(log.isDebugEnabled())
-                log.debug(dbname+" has "+queue.size()+" copies");
-            dbs.put(dbname, queue);
-        }
-        log.debug("Exit: initDB");
-        return;
-    }
-    
-    
     protected void initDB(final String dbname, String srwHomeVal, String dbHome, String dbPropertiesFileName, Properties dbProperties) {
         log.debug("Enter: private initDB, dbname="+dbname);
         this.dbname=dbname;
@@ -1287,26 +1315,42 @@ public abstract class SRWDatabase {
 
 
     public void makeExplainRecord(HttpServletRequest request) {
+//        log.error("makeExplainRecord being called from:");
+//        Thread.dumpStack();
         log.debug("Making an explain record for database "+dbname);
-        StringBuffer sb=new StringBuffer();
-sb.append("      <explain authoritative=\"true\" xmlns=\"http://explain.z3950.org/dtd/2.0/\">\n");
-sb.append("        <serverInfo protocol=\"SRW/U\">\n");
-if(request!=null) {
-sb.append("          <host>"+request.getServerName()+"</host>\n");
-sb.append("          <port>"+request.getServerPort()+"</port>\n");
-sb.append("          <database>");
-        String contextPath=request.getContextPath();
-if(contextPath!=null && contextPath.length()>1)
-    sb.append(contextPath.substring(1));
-sb.append(request.getServletPath()).append(request.getPathInfo()).append("</database>\n");
-}
-sb.append("          </serverInfo>\n");
-sb.append(getDatabaseInfo());
-sb.append(getMetaInfo());
-sb.append(getIndexInfo());
-sb.append(getSchemaInfo());
-sb.append(getConfigInfo());
-sb.append("        </explain>\n");
+        StringBuilder sb=new StringBuilder(), urlStr=new StringBuilder();
+        sb.append("      <explain authoritative=\"true\" xmlns=\"http://explain.z3950.org/dtd/2.0/\">\n");
+        sb.append("        <serverInfo protocol=\"SRW/U\">\n");
+        if(request!=null) {
+            sb.append("          <host>"+request.getServerName()+"</host>\n");
+            urlStr.append("http://").append(request.getServerName());
+            sb.append("          <port>"+request.getServerPort()+"</port>\n");
+            if(request.getServerPort()!=80)
+                urlStr.append(":").append(request.getServerPort());
+            sb.append("          <database>");
+            String contextPath=request.getContextPath();
+            if(contextPath!=null && contextPath.length()>1) {
+                sb.append(contextPath.substring(1));
+                urlStr.append(contextPath.substring(1));
+            }
+            sb.append(request.getServletPath());
+            urlStr.append(request.getServletPath());
+            String pathInfo=request.getPathInfo();
+            if(pathInfo!=null) {
+                sb.append(request.getPathInfo());
+                urlStr.append(request.getPathInfo());
+            }
+            sb.append("</database>\n");
+            baseURL=urlStr.toString();
+            log.error("baseURL="+baseURL);
+        }
+        sb.append("          </serverInfo>\n");
+        sb.append(getDatabaseInfo());
+        sb.append(getMetaInfo());
+        sb.append(getIndexInfo());
+        sb.append(getSchemaInfo());
+        sb.append(getConfigInfo());
+        sb.append("        </explain>\n");
         setExplainRecord(sb.toString());
     }
 
@@ -1505,7 +1549,7 @@ sb.append("        </explain>\n");
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
             int end=currentExtraData.lastIndexOf('<'), start=currentExtraData.indexOf('<', 1);
-            extraResponseData.append(currentExtraData.substring(start, end-1));
+            extraResponseData.append(currentExtraData.substring(start, end));
         }
         extraResponseData.append(extraData).append("</extraData>");
         response.setExtraResponseData(makeExtraDataType(extraResponseData.toString()));
