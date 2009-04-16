@@ -56,20 +56,22 @@ public class SRWServletInfo {
 
     private boolean      madeIndexDotHtml=false, makeIndexDotHtml=false;
     private Hashtable<String, String> extensions=new Hashtable<String, String>(), namespaces=new Hashtable<String, String>();
-    public int           pathInfoIndex=1, resultSetIdleTime=300; // time in seconds
+    public  Hashtable<String, String> dbnames=new Hashtable<String, String>();
+    public int           pathInfoIndex=100, resultSetIdleTime=300; // time in seconds
     private Properties   properties=new Properties();
     public String        databaseURL, defaultDatabase, indexDotHtmlLocation=null,
                          propsfileName;
+    public Vector<DbEntry> dbVector=new Vector<DbEntry>();
 
     public SRWServletInfo() {
     }
 
     
-    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, String path) {
-        buildDbList(properties, dbVector, path, null);
+    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, Hashtable<String, String> dbnames, String path) {
+        buildDbList(properties, dbVector, dbnames, path, null);
     }
 
-    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, String path, String remote) {
+    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, Hashtable<String, String> dbnames, String path, String remote) {
         Enumeration enumer=properties.propertyNames();
         String      fileName, dbHome, dbName, description, hidden=null, t;
         while(enumer.hasMoreElements()) {
@@ -103,6 +105,7 @@ public class SRWServletInfo {
                 }
                 if(remote!=null || hidden==null || !hidden.equalsIgnoreCase("true")) {
                     dbVector.add(new DbEntry(dbName, remote, path, description));
+                    dbnames.put(dbName, dbName);
                 }
             }
             else if(remote==null && t.startsWith("remote.") && t.endsWith(".configuration")) {
@@ -114,13 +117,24 @@ public class SRWServletInfo {
                     Properties srwProperties=new Properties();
                     srwProperties.load(is);
                     is.close();
-                    buildDbList(srwProperties, dbVector, remotePath, remote);
+                    buildDbList(srwProperties, dbVector, dbnames, remotePath, remote);
                 }
                 catch(IOException e) {
                     log.error(e);
                 }
                 remote=null;
             }
+        }
+    }
+
+    private void createDBs(final String list) throws InstantiationException {
+        if(list==null || list.equals(""))
+            return;
+        String          dbname;
+        StringTokenizer st=new StringTokenizer(list, ", ");
+        while(st.hasMoreTokens()) {
+            dbname=st.nextToken();
+            SRWDatabase.createDB(dbname, properties);
         }
     }
 
@@ -138,6 +152,7 @@ public class SRWServletInfo {
         }
         while(locales.hasMoreElements()) {
             l=(Locale)locales.nextElement();
+            log.error("looking for "+xsl+" in "+webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             f=new File(webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -145,6 +160,7 @@ public class SRWServletInfo {
                 break;
             }
             log.debug("didn't find "+f.getAbsolutePath());
+            log.error("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             f=new File(tomcatHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -152,12 +168,14 @@ public class SRWServletInfo {
                 break;
             }
             log.debug("didn't find "+f.getAbsolutePath());
+            log.error("looking in "+webappHome+"/"+base+"_"+l.getLanguage()+suffix);
             f=new File(webappHome+"/"+base+"_"+l.getLanguage()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
                 realXsl=base+"_"+l.getLanguage()+suffix;
                 break;
             }
+            log.error("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+suffix);
             f=new File(tomcatHome+"/"+base+"_"+l.getLanguage()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -176,9 +194,14 @@ public class SRWServletInfo {
         log.info("pathInfo="+path);
         if(path!=null && path.indexOf('/')>=0) {
             st=new StringTokenizer(path, "/");
-            for(int i=0; i<pathInfoIndex && st.hasMoreTokens(); i++)
+            for(int i=0; i<pathInfoIndex && st.hasMoreTokens(); i++) {
                 dbname=st.nextToken();
+                if(dbnames.get(dbname)!=null)
+                    break;
+            }
         }
+        if(dbnames.get(dbname)==null)
+            dbname=defaultDatabase;
         log.info("dbname="+dbname);
         return dbname;
     }
@@ -202,7 +225,7 @@ public class SRWServletInfo {
                recordPacking=request.getParameter("recordPacking"),
                stylesheet=request.getParameter("stylesheet");
         log.info("Got an explain request for database "+dbname);
-        SRWDatabase db=SRWDatabase.getDB(dbname, properties, request.getContextPath());
+        SRWDatabase db=SRWDatabase.getDB(dbname, properties, request.getContextPath(), request);
         if(db==null) {
             log.error("Non-existant database "+dbname+" in properties file \""+propsfileName+"\"");
             response.setStatus(404);
@@ -226,8 +249,7 @@ public class SRWServletInfo {
             writer.write("    <SRW:recordData>\n");
             String explainRecord=db.getExplainRecord(request);
             if(explainRecord==null) {
-                db.makeExplainRecord(request);
-                explainRecord=db.getExplainRecord();
+                explainRecord=db.getExplainRecord(request);
             }
             if(recordPacking.equals("string"))
                 Utilities.writeEncoded(writer, explainRecord);
@@ -255,13 +277,24 @@ public class SRWServletInfo {
                 propsfileName="SRWServer.props";
             }
             log.info("Reading properties file: "+propsfileName);
-            webappHome=srwHome=config.getServletContext().getRealPath("/");
-            int off=webappHome.lastIndexOf('/');
+            srwHome=config.getServletContext().getRealPath("/");
+            if(srwHome.endsWith("/"))
+                srwHome=srwHome.substring(0, srwHome.length()-1);
+            if(srwHome.endsWith("\\"))
+                srwHome=srwHome.substring(0, srwHome.length()-1);
+            log.debug("srwHome="+srwHome);
+            int off=srwHome.lastIndexOf('/');
+            if(off<0)
+                off=srwHome.lastIndexOf('\\');
             if(off>0) {
-                tomcatHome=webappHome.substring(0, off);
-                off=tomcatHome.lastIndexOf('/');
+                webappHome=srwHome.substring(0, off);
+                log.debug("webappHome="+webappHome);
+                off=webappHome.lastIndexOf('/');
+                if(off<0)
+                    off=webappHome.lastIndexOf('\\');
                 if(off>0)
-                    tomcatHome=tomcatHome.substring(0, off);
+                    tomcatHome=webappHome.substring(0, off);
+                log.debug("tomcatHome="+tomcatHome);
             }
             InputStream is;
             try {
@@ -279,6 +312,7 @@ public class SRWServletInfo {
                     properties.setProperty(propName, config.getInitParameter(propName));
                 }
             }
+            buildDbList(properties, dbVector, dbnames, config.getServletContext().getRealPath("/"));
             srwHome=properties.getProperty("SRW.Home");
             if(srwHome==null) {
                 srwHome=config.getServletContext().getRealPath("/");
@@ -311,7 +345,7 @@ public class SRWServletInfo {
                 s=properties.getProperty("SRW.OpenDatabasesInListOnStartup");
                 if(s!=null) {
                     log.info("Opening databases: "+s);
-                    initDBs(s);
+                    createDBs(s);
                 }
                 else
                     log.info("Not opening databases yet");
@@ -333,7 +367,7 @@ public class SRWServletInfo {
                         }
                     }
                     log.info("Opening all databases :"+list);
-                    initDBs(list);
+                    createDBs(list);
                 }
 
             // load the sru-srw extension mapping table
@@ -360,17 +394,6 @@ public class SRWServletInfo {
     }
     
     
-    private void initDBs(final String list) throws InstantiationException {
-        if(list==null || list.equals(""))
-            return;
-        String          dbname;
-        StringTokenizer st=new StringTokenizer(list, ", ");
-        while(st.hasMoreTokens()) {
-            dbname=st.nextToken();
-            SRWDatabase.initDB(dbname, properties);
-        }
-    }
-
     public void makeIndexDotHtml(Properties properties, HttpServletRequest request) {
         Enumeration enumer;
         String      dbname, t;
@@ -408,8 +431,8 @@ public class SRWServletInfo {
         ps.println("</table>");
         ps.println("</div>");
         ps.println("<table class=\"formtable\">");
-        Vector<DbEntry> dbVector=new Vector<DbEntry>();
-        buildDbList(properties, dbVector, path);
+        if(dbVector.isEmpty())
+            buildDbList(properties, dbVector, dbnames, path);
         Object[] dbList=dbVector.toArray();
         Arrays.sort(dbList);
         DbEntry de;
@@ -446,16 +469,14 @@ public class SRWServletInfo {
         if(log.isDebugEnabled())
             log.debug("contextPath="+contextPath);
 
-        SRWDatabase db=SRWDatabase.getDB(dbname, properties, contextPath);
+        SRWDatabase db=SRWDatabase.getDB(dbname, properties, contextPath, request);
         if(db==null) {
             log.error("Non-existant database "+dbname);
             log.error("requesting url was: "+request.getRequestURL().toString());
             response.setStatus(404);
             return false;
         }
-        if(db.getExplainRecord()==null) {
-            db.makeExplainRecord(request);
-        }
+        db.getExplainRecord(request);
         if(makeIndexDotHtml && !madeIndexDotHtml) {
             makeIndexDotHtml(properties, request);
             madeIndexDotHtml=true;  // once is enough
