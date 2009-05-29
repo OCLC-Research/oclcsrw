@@ -11,7 +11,7 @@ The way the magic works is that I have a [http://tuckey.org/urlrewrite/ urlrewri
 
 = Features and How They Are Implemented =
 == Generic URI ==
-First, you need some regular expression that you can use to detect the URI nature of the incoming URL.  In the case of VIAF, the URI consists of 1 or more digits, so the pattern is ([0-9][0-9]+).
+First, you need some regular expression that you can use to detect the URI nature of the incoming URL.  In the case of VIAF, the URI consists of 1 or more digits, so the pattern is `([0-9][0-9]+)`.
 
 In the urlrewrite filter configuration file (urlrewrite.xml) put in a rule for that pattern.  In VIAF, that rule looks like this:
 {{{
