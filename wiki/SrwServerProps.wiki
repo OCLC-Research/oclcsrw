@@ -42,7 +42,7 @@ extension.restrictorSummary.namespace=info:srw/extension/14/restrictorSummary
 
 The value for the namespace is pretty much meaningless, so make up your own URL.
 
-See the separate document SRUInputParameterExtensions for information on how to access this parameter within your code.
+See the separate document [SRUInputParameterExtensions] for information on how to access this parameter within your code.
 
 ==Databases==
 ===default.database===
