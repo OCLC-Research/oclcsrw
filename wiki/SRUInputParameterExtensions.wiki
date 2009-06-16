@@ -1,9 +1,4 @@
-#summary Describes how to define local parameters for an SRU server.
-
-= Introduction =
-
-Add your content here.
-
+#summary Documentation on how to define local SRU parameters, how to access those parameters in your code and how to set extraResponseData.
 
 = Defining Local SRU Parameters=
 
