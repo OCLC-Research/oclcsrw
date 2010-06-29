@@ -58,7 +58,8 @@ public class TermTypeIterator implements Iterator {
         this.relation=relation;
         URL url=new URL(baseURL);
         HttpURLConnection conn = (HttpURLConnection)url.openConnection();
-        System.out.println("responseCode="+conn.getResponseCode());
+        if(conn.getResponseCode()!=200)
+            System.out.println("responseCode="+conn.getResponseCode());
         if(conn.getContentType().toLowerCase().indexOf("xml")<0)
             throw new IOException("baseURL \""+baseURL+
                 "\" should have returned a content type"+
@@ -110,8 +111,15 @@ public class TermTypeIterator implements Iterator {
         if(pos>=terms.length) {
             pos=0;
             String seed=terms[terms.length-1].getValue();
+//            System.out.println(seed);
+            if(seed.indexOf('"')>=0)  // I don't know how to escape this
+                seed=seed.replace('"', 'z');  // so we'll just skip over it
+//            if(seed.indexOf("&quot;")>=0)  // I don't know how to escape this
+//                seed=seed.replace("&quot;", "z");  // so we'll just skip over it
+//            if(seed.indexOf("%22")>=0)  // I don't know how to escape this
+//                seed=seed.replace("%22", "z");  // so we'll just skip over it
             try {
-//                System.out.println("url: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+Utilities.urlEncode(terms[terms.length-1].getValue())+
+//                System.out.println("url: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+URLEncoder.encode(seed, "UTF-8")+
 //                          "%22&responsePosition=1"+
 //                          "&maximumTerms="+NumScanTerms);
                 terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
@@ -130,7 +138,7 @@ public class TermTypeIterator implements Iterator {
 //                          "&maximumTerms="+NumScanTerms);
                 return false;
             }
-            if(terms.length==1 && terms[0].getValue().equals(seed)) {
+            if(terms[terms.length-1].getValue().equals(seed)) {
 //                System.out.println("url returned seed term: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+Utilities.urlEncode(seed)+
 //                          "%22&responsePosition=1"+
 //                          "&maximumTerms="+NumScanTerms);

@@ -170,9 +170,11 @@ public class Utilities {
                 return f;
         }
 
-        log.error("Couldn't find \""+fileName+"\" in the CWD or in \""+
-            directory1+"\" or \""+directory2+"\" or on the classpath");
-        log.error("classpath: "+System.getProperty("java.class.path"));
+        if(log.isDebugEnabled()) {
+            log.debug("Couldn't find \""+fileName+"\" in the CWD or in \""+
+                directory1+"\" or \""+directory2+"\" or on the classpath");
+            log.debug("classpath: "+System.getProperty("java.class.path"));
+        }
         return null;
     }
 
@@ -218,8 +220,13 @@ public class Utilities {
             sru.append("operation=searchRetrieve");
             if(request.getMaximumRecords()!=null)
                 sru.append('&').append("maximumRecords=").append(request.getMaximumRecords().toString());
-            if(request.getQuery()!=null)
-                sru.append('&').append("query=").append(urlEncode(request.getQuery()));
+            if(request.getQuery()!=null) {
+                String query=request.getQuery();
+                if(query.startsWith("\""))
+                    sru.append('&').append("query=").append(urlEncode(request.getQuery()));
+                else
+                    sru.append('&').append("query=").append('"').append(urlEncode(request.getQuery())).append('"');
+            }
             if(request.getRecordPacking()!=null)
                 sru.append('&').append("recordPacking=").append(request.getRecordPacking());
             if(request.getRecordSchema()!=null)
@@ -529,8 +536,8 @@ public class Utilities {
             if(c=='&') {
                 c1=s.charAt(i+1);
                 switch(c1) {
-                    case '#':
-                        if(s.length()>i+2 && s.charAt(i+2)=='x') {
+                    case '#': // &#xnn; or &#xnnnn;
+                        if(s.length()>i+5 && s.charAt(i+2)=='x' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
                                     sb=new StringBuffer(s.substring(0, i));
@@ -540,6 +547,28 @@ public class Utilities {
                             }
                             sb.append((char)Integer.parseInt(s.substring(i+3, i+5), 16));
                             i+=5;
+                        }
+                        else if(s.length()>i+6 && s.charAt(i+2)=='x' && s.charAt(i+6)==';') {
+                            if(!changed) {
+                                if(i>0)
+                                    sb=new StringBuffer(s.substring(0, i));
+                                else
+                                    sb=new StringBuffer();
+                                changed=true;
+                            }
+                            sb.append((char)Integer.parseInt(s.substring(i+3, i+6), 16));
+                            i+=6;
+                        }
+                        else if(s.length()>i+7 && s.charAt(i+2)=='x' && s.charAt(i+7)==';') {
+                            if(!changed) {
+                                if(i>0)
+                                    sb=new StringBuffer(s.substring(0, i));
+                                else
+                                    sb=new StringBuffer();
+                                changed=true;
+                            }
+                            sb.append((char)Integer.parseInt(s.substring(i+3, i+7), 16));
+                            i+=7;
                         }
                         break;
                     case 'a':
@@ -555,7 +584,7 @@ public class Utilities {
                             sb.append('\'');
                             i+=5;
                         }
-                        else if(s.length()>i+3 && s.charAt(i+2)=='m' && s.charAt(i+3)=='p' &&
+                        else if(s.length()>i+4 && s.charAt(i+2)=='m' && s.charAt(i+3)=='p' &&
                           s.charAt(i+4)==';') {
                             if(!changed) {
                                 if(i>0)
@@ -565,7 +594,7 @@ public class Utilities {
                                 changed=true;
                             }
                             sb.append('&');
-                            i+=5;
+                            i+=4;
                         }
                         break;
                     case 'g':

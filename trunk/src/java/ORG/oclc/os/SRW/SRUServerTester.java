@@ -152,6 +152,11 @@ public class SRUServerTester {
                 database=database.substring(1);
             }
             String save=baseURL;
+            if(port==null || port.length()==0) {
+                out("  ** Warning: your explain record has not specified a port number.");out('\n');
+                out("  It should have been set explicitly to 80.");out('\n');
+                numWarns++;
+            }
             if(port.equals("80") || port.equals("8080") || port.equals("7090"))
                 baseURL="http://"+host+":"+port+"/"+database+"?";
             else {
@@ -159,6 +164,7 @@ public class SRUServerTester {
                 out("  the SRUServerTester is restricted to testing on ports 80, 8080 and 7090.");out('\n');
                 out("  Further testing will ignore the host and port provided in the");out('\n');
                 out("  explain record");out('\n');
+                numWarns++;
             }
             if(!isExplainResponse(sruRead(baseURL))) {
                 out("</pre><pre class='red'>");
@@ -176,6 +182,7 @@ public class SRUServerTester {
                 }
                 catch(MalformedURLException e) {}
                 out("</pre><pre>");
+                numFailed++;
             }
             // construct a list of indexes from the explainResponse
             NodeList indexes=getNodeList(explainDoc, ExplainResponsePath+"/exp:indexInfo/exp:index");
@@ -632,6 +639,8 @@ public class SRUServerTester {
             // no term found, but we did get a diagnostic
             return true;
         }
+        if(foundTerm.postings==null || foundTerm.postings.length()==0 || "0".equals(foundTerm.postings))
+            foundTerm.postings="-1"; // no postings count returned with term
                 
         vTerms.add(foundTerm);
         out("        scan returned ");out(foundTerm.term);out('\n');
