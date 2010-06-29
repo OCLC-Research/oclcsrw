@@ -7,7 +7,7 @@
 
 package gov.loc.www.zing.srw;
 
-public class TermType  implements java.io.Serializable {
+public class TermType  implements Comparable, java.io.Serializable {
     private java.lang.String value;
     private org.apache.axis.types.NonNegativeInteger numberOfRecords;
     private java.lang.String displayTerm;
@@ -131,6 +131,7 @@ public class TermType  implements java.io.Serializable {
     }
 
     private java.lang.Object __equalsCalc = null;
+    @Override
     public synchronized boolean equals(java.lang.Object obj) {
         if (!(obj instanceof TermType)) return false;
         TermType other = (TermType) obj;
@@ -162,6 +163,7 @@ public class TermType  implements java.io.Serializable {
     }
 
     private boolean __hashCodeCalc = false;
+    @Override
     public synchronized int hashCode() {
         if (__hashCodeCalc) {
             return 0;
@@ -260,7 +262,12 @@ public class TermType  implements java.io.Serializable {
             _javaType, _xmlType, typeDesc);
     }
 
+    @Override
     public String toString() {
         return value;
+    }
+
+    public int compareTo(Object o) {
+        return value.compareTo(((TermType)o).getValue());
     }
 }

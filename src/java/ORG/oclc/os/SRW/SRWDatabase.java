@@ -21,6 +21,8 @@
 
 package ORG.oclc.os.SRW;
 
+import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator;
+import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator.VariantSpec;
 import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.RecordType;
 import gov.loc.www.zing.srw.RecordsType;
@@ -42,7 +44,10 @@ import java.io.StringReader;
 import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Hashtable;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
@@ -88,6 +93,7 @@ import org.z3950.zing.cql.CQLTermNode;
  */
 public abstract class SRWDatabase {
     private static Log log=LogFactory.getLog(SRWDatabase.class);
+    private static SimpleDateFormat ISO8601FORMAT=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
 
     public static final String DEFAULT_SCHEMA = "default";
 
@@ -127,6 +133,9 @@ public abstract class SRWDatabase {
     }
     private boolean returnResultSetId=true;
     private Random rand=new Random();
+    public ContentTypeNegotiator conneg=null;
+    public HashMap<String, String> mediaTypes=new HashMap<String, String>();
+    public HashMap<String, String> recordSchemas=new HashMap<String, String>();
     public HttpHeaderSetter httpHeaderSetter=null;
     public SearchRetrieveRequestType searchRequest;
     public SearchRetrieveResponseType response;
@@ -134,7 +143,8 @@ public abstract class SRWDatabase {
                    scanStyleSheet=null, searchStyleSheet=null;
 
     protected boolean     letDefaultsBeDefault=false;
-    protected CQLParser   parser = new CQLParser();
+    protected CQLParser   parser = new CQLParser(CQLParser.V1POINT1);
+    protected DocumentBuilder docb = null;
     protected Hashtable<String, String> nameSpaces=new Hashtable<String, String>(), schemas=new Hashtable<String, String>();
     protected Hashtable   sortTools = new Hashtable();
     protected Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
@@ -142,8 +152,9 @@ public abstract class SRWDatabase {
                           maximumRecords=20, maxTerms = 9, position = 5;
     protected Properties  dbProperties;
     protected SRWDatabase db;
-    protected String      dbHome, dbPropertiesFileName, defaultSchema,
-                          defaultStylesheet=null, explainRecord=null, schemaInfo;
+    protected String      dbHome, dbPropertiesFileName, defaultMimeType="text/xml",
+                          defaultSchema, defaultStylesheet=null,
+                          explainRecord=null, schemaInfo;
     
     
     public boolean add(byte[] record) {
@@ -174,7 +185,7 @@ public abstract class SRWDatabase {
             schemas.put(schemaID, schemaID);
         }
         if(transformerFileName==null) {
-            log.info(schemaName+".transformer not specified");
+            log.info(schemaName+" transformer not specified");
             log.info(".props filename is " + dbPropertiesFileName);
             return null;
         }
@@ -210,7 +221,7 @@ public abstract class SRWDatabase {
         transformers.put(schemaName, t);
         if(schemaID!=null)
             transformers.put(schemaID, t);
-        log.info("added transformer for schemaName "+schemaName+", and schemaID "+schemaID);
+        log.debug("added transformer for schemaName "+schemaName+", and schemaID "+schemaID);
         return t;
     }
 
@@ -641,6 +652,7 @@ public abstract class SRWDatabase {
             if(!letDefaultsBeDefault || !schemaName.equals("default")) {
                 schemaID = getSchemaID(schemaName);
                 if(schemaID==null) {
+                    log.debug("unknown schema: "+schemaName);
                     diagnostic(SRWDiagnostic.UnknownSchemaForRetrieval, schemaName, response);
                     numRecs=0;
                 }
@@ -748,24 +760,12 @@ public abstract class SRWDatabase {
                     RecordsType records = new RecordsType();
 
                     records.setRecord(new RecordType[numRecs]);
-                    Document               domDoc;
-                    DocumentBuilder        docb = null;
-                    DocumentBuilderFactory dbf = null;
-                    int                    i,  listEntry = -1;
+                    int                    i;
                     MessageElement         elems[];
                     Record                 rec;
                     RecordType             rt;
                     String                 recStr = "";
                     StringOrXmlFragment    frag;
-                    if (recordPacking.equals("xml")) {
-                        dbf = DocumentBuilderFactory.newInstance();
-                        dbf.setNamespaceAware(true);
-                        try {
-                            docb=dbf.newDocumentBuilder();
-                        } catch (ParserConfigurationException e) {
-                            log.error(e, e);
-                        }
-                    }
 
                     /**
                      * One at a time, retrieve and display the requested documents.
@@ -792,8 +792,9 @@ public abstract class SRWDatabase {
                             if(rec.hasExtraRecordInfo())
                                 setExtraRecordData(rt, rec.getExtraRecordInfo());
                         } catch (IOException e) {
+                            log.error("error getting document "+(i+1)+", postings="+postingsCount);
+                            log.error(e, e);
                             try {
-                                log.error(e, e);
                                 makeElem(SRWDiagnostic.newSurrogateDiagnostic(
                                     "info:srw/diagnostic/1/",
                                     SRWDiagnostic.RecordTemporarilyUnavailable,
@@ -807,11 +808,10 @@ public abstract class SRWDatabase {
                                 log.error(e, e);
                                 break;
                             }
-                            log.error("error getting document "+(i+1)+", postings="+postingsCount);
-                            log.error(e, e);
                         } catch (NoSuchElementException e) {
+                            log.error("error getting document "+(i+1)+", postings="+postingsCount);
+                            log.error(e, e);
                             try {
-                                log.error(e, e);
                                 makeElem(SRWDiagnostic.newSurrogateDiagnostic(
                                     "info:srw/diagnostic/1/",
                                     SRWDiagnostic.RecordTemporarilyUnavailable,
@@ -825,8 +825,6 @@ public abstract class SRWDatabase {
                                 log.error(e, e);
                                 break;
                             }
-                            log.error("error getting document "+(i+1)+", postings="+postingsCount);
-                            log.error(e, e);
                         } catch (SAXException e) {
                             try {
                                 log.error(e, e);
@@ -884,7 +882,6 @@ public abstract class SRWDatabase {
         } // if(postingsCount>0)
 
         String extraResponseData = getExtraResponseData(result, request);
-        log.info("extraResponseData="+extraResponseData);
         if(extraResponseData!=null)
             setExtraResponseData(response, extraResponseData);
 
@@ -978,41 +975,41 @@ public abstract class SRWDatabase {
         LinkedList<SRWDatabase> queue=dbs.get(dbname);
         SRWDatabase db=null;
         try {
-        if(queue==null)
-            log.info("No databases created yet for database "+dbname);
-        else {
-            log.debug("about to synchronize #1 on queue");
-            synchronized(queue) {
-                if(queue.isEmpty())
-                    log.info("No databases available for database "+dbname);
-                else {
-                    db=queue.removeFirst();
-                    if(db==null)
-                        log.debug("popped a null database off the queue for database "+dbname);
-                }
-            }
-            log.debug("done synchronize #1 on queue");
-        }
-        if(db==null) {
-            log.info("creating a database for "+dbname);
-            try{
-                while(db==null) {
-                    createDB(dbname, properties, servletContext, request);
-                    queue=dbs.get(dbname);
-                    log.debug("about to synchronize #2 on queue");
-                    synchronized(queue) {
-                        if(!queue.isEmpty()) // crap, someone got to it before us
-                            db=queue.removeFirst();
+            if(queue==null)
+                log.info("No SRW databases opened yet for database "+dbname);
+            else {
+                log.debug("about to synchronize #1 on queue");
+                synchronized(queue) {
+                    if(queue.isEmpty())
+                        log.info("No SRW databases left in queue for database "+dbname);
+                    else {
+                        db=queue.removeFirst();
+                        if(db==null)
+                            log.debug("popped a null database off the queue for database "+dbname);
                     }
                 }
-            log.debug("done synchronize #2 on queue");
+                log.debug("done synchronize #1 on queue");
             }
-            catch(Exception e) { // database not available
-                badDbs.put(dbname, dbname);
-                log.error(e, e);
-                return null;
+            if(db==null) {
+                log.info("Opening an SRW database for "+dbname);
+                try{
+                    while(db==null) {
+                        createDB(dbname, properties, servletContext, request);
+                        queue=dbs.get(dbname);
+                        log.debug("about to synchronize #2 on queue");
+                        synchronized(queue) {
+                            if(!queue.isEmpty()) // crap, someone got to it before us
+                                db=queue.removeFirst();
+                        }
+                    }
+                log.debug("done synchronize #2 on queue");
+                }
+                catch(Exception e) { // database not available
+                    badDbs.put(dbname, dbname);
+                    log.error(e, e);
+                    return null;
+                }
             }
-        }
         }
         catch(Exception e) {
             log.error(e,e);
@@ -1054,6 +1051,15 @@ public abstract class SRWDatabase {
     }
 
 
+    /**
+     *  overridable method to return the update date for a database
+     * @return long
+     */
+    public long getLastUpdated() {
+        return 0;
+    }
+
+
     public int getMaximumRecords() {
         return maximumRecords;
     }
@@ -1075,6 +1081,15 @@ public abstract class SRWDatabase {
         }
         sb.append("          </metaInfo>\n");
         return sb.toString();
+    }
+
+
+    /**
+     *  How many records does this database have in it?
+     * @return int
+     */
+    public int getNumberOfDatabaseRecords() {
+        return 0;
     }
 
 
@@ -1158,6 +1173,15 @@ public abstract class SRWDatabase {
         this.dbPropertiesFileName=dbPropertiesFileName;
         this.dbProperties=dbProperties;
 
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
+        try {
+            dbf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            docb=dbf.newDocumentBuilder();
+        } catch (ParserConfigurationException e) {
+            log.error(e, e);
+        }
+
         if(dbProperties!=null) {
             String httpHeaderSetterClass=dbProperties.getProperty("HttpHeaderSetter");
             if(httpHeaderSetterClass!=null) {
@@ -1175,6 +1199,13 @@ public abstract class SRWDatabase {
                     log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
                 }
             }
+
+            // if the client doesn't say what they want, what should they get?
+            // typically, this only happens with applications that don't set
+            // the "accept" header, i.e., non-browser applications.  The
+            // default value is set to text/xml, assuming that non-browser apps
+            // want to see the full xml, not some rendered html
+            defaultMimeType=dbProperties.getProperty("defaultMimeType", defaultMimeType);
 
             // get schema transformers
             String          firstSchema=null, xmlSchemaList=dbProperties.getProperty("xmlSchemas");
@@ -1280,6 +1311,40 @@ public abstract class SRWDatabase {
                 searchStyleSheet=searchStyleSheet.replace("/$context", "");
                 scanStyleSheet=scanStyleSheet.replace("/$context", "");
             }
+
+            conneg=new ContentTypeNegotiator();
+            Enumeration enumer = dbProperties.keys();
+            int offset;
+            String key, mediaType, mimeType, name, recordSchema, value;
+            VariantSpec vs;
+            while(enumer.hasMoreElements()) {
+                key=(String)enumer.nextElement();
+                offset=key.indexOf("mimeTypes");
+                if(offset>0) {
+                    name=key.substring(0, offset-1);
+                    value=dbProperties.getProperty(key);
+                    log.info(key+"="+value);
+                    st=new StringTokenizer(value, ", ");
+                    mimeType=st.nextToken();
+                    vs=conneg.addVariant(mimeType);
+                    mediaType=vs.getMediaType().getMediaType();
+                    try {
+                        addTransformer(mediaType, null, dbProperties.getProperty(name+".styleSheet"), null, null);
+                        while(st.hasMoreTokens())
+                            vs.addAliasMediaType(st.nextToken());
+                    } catch (Exception e) {
+                        log.error("Unable to stylesheet "+dbProperties.getProperty(name+".styleSheet"));
+                        log.error(e, e);
+                    }
+                    // we should only need this when the transformer
+                    // can't run from the default schema
+                    recordSchema=dbProperties.getProperty(name+".recordSchema");
+                    if(recordSchema!=null && transformers.get(recordSchema)==null) {
+                        recordSchemas.put(mediaType, recordSchema);
+                        log.info("mediaType: "+mediaType+" requires recordSchema: "+dbProperties.getProperty(name+".recordSchema"));
+                    }
+                }
+            }
         }
         log.debug("Exit: private initDB");
     }
@@ -1327,7 +1392,17 @@ public abstract class SRWDatabase {
             sb.append("          <port>"+request.getServerPort()+"</port>\n");
             if(request.getServerPort()!=80)
                 urlStr.append(":").append(request.getServerPort());
-            sb.append("          <database>");
+            long lastUpdated=getLastUpdated();
+            if(lastUpdated==0)
+                sb.append("          <database>");
+            else {
+                sb.append("          <database lastUpdate=\"")
+                  .append(ISO8601FORMAT.format(new Date(lastUpdated)))
+                  .append("\" numRecs=\"")
+                  .append(getNumberOfDatabaseRecords())
+                  .append("\">");
+            }
+            urlStr.append('/');
             String contextPath=request.getContextPath();
             if(contextPath!=null && contextPath.length()>1) {
                 sb.append(contextPath.substring(1));
@@ -1342,7 +1417,7 @@ public abstract class SRWDatabase {
             }
             sb.append("</database>\n");
             baseURL=urlStr.toString();
-            log.error("baseURL="+baseURL);
+            log.debug("baseURL="+baseURL);
         }
         sb.append("          </serverInfo>\n");
         sb.append(getDatabaseInfo());
@@ -1581,7 +1656,6 @@ public abstract class SRWDatabase {
 
 
     public Record transform(Record rec, String schemaID) throws SRWDiagnostic {
-        String recStr = Utilities.hex07Encode(rec.getRecord());
         if (schemaID!=null && !rec.getRecordSchemaID().equals(schemaID)) {
             log.debug("transforming to "+schemaID);
             // They must have specified a transformer
@@ -1596,6 +1670,7 @@ public abstract class SRWDatabase {
                 }
                 throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schemaID);
             }
+            String recStr = Utilities.hex07Encode(rec.getRecord());
             StringWriter toRec = new StringWriter();
             StreamSource fromRec = new StreamSource(new StringReader(recStr));
             try {
@@ -1605,8 +1680,9 @@ public abstract class SRWDatabase {
                 throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schemaID);
             }
             recStr=toRec.toString();
+            return new Record(recStr, schemaID);
         }
-        return new Record(recStr, schemaID);
+        return rec;
     }
 
 

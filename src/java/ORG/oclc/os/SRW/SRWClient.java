@@ -53,11 +53,13 @@ public class SRWClient {
 //                  "http://alcme.oclc.org/srw/search/SOAR");
                   //"http://localhost:8082/srw/search/SOAR");
                   //"http://localhost:8082/SRW/search/SOAR");
-                  "http://localhost:8082/SRW/search/GSAFD");
+//                  "http://localhost:8082/SRW/search/GSAFD");
                   //"http://srw.cheshire3.org:8080/l5r");
                   //"http://localhost:8082/l5r");
                   //"http://www.rdn.ac.uk:8080/xxdefault");
                   //"http://localhost:8082/xxdefault");
+                  "http://dev-www.nature.com/opensearch");
+//                  "http://levan-rvista.oa.oclc.org:8080/identities/search/");
             ExplainPort explain=service.getExplainSOAP(url);
             ExplainRequestType explainRequest=new ExplainRequestType();
             explainRequest.setRecordPacking("xml");

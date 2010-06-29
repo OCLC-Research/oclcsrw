@@ -30,14 +30,12 @@ import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import gov.loc.www.zing.srw.interfaces.SRWPort;
 import java.io.IOException;
-import java.net.URL;
 import java.rmi.RemoteException;
 
 import ORG.oclc.os.SRW.SRWDatabase;
 import ORG.oclc.os.SRW.SRWDiagnostic;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Hashtable;
 import org.apache.axis.MessageContext;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.commons.logging.Log;
@@ -54,6 +52,7 @@ import org.z3950.zing.cql.CQLTermNode;
 public class SRWSoapBindingImpl implements SRWPort {
     Log log=LogFactory.getLog(SRWSoapBindingImpl.class);
     static Method cqlWorkaroundMethod=null;
+    CQLParser cqlparser=new CQLParser(CQLParser.V1POINT1);
     
     static {
         // The method getQualifier() was replaced by getIndex() in version 1.0 of 
@@ -165,22 +164,22 @@ public class SRWSoapBindingImpl implements SRWPort {
                 extraResponseData.append("<databaseTitle>").append(dbname).append("</databaseTitle>");
 
             // did they ask for the targetURL to be returned?
-            Hashtable extraRequestDataElements=SRWDatabase.parseElements(request.getExtraRequestData());
-            String s=(String)extraRequestDataElements.get("returnTargetURL");
-            log.info("returnTargetURL="+s);
-            if(s!=null && !s.equals("false")) {
-                String targetStr=(String)msgContext.getProperty("targetURL");
-                log.info("targetStr="+targetStr);
-                if(targetStr!=null && targetStr.length()>0) {
-                    URL target=new URL(targetStr);
-                    extraResponseData.append("<targetURL>")
-                        .append("<host>").append(target.getHost()).append("</host>")
-                        .append("<port>").append(target.getPort()).append("</port>")
-                        .append("<path>").append(target.getPath()).append("</path>")
-                        .append("<query>").append(Utilities.xmlEncode(target.getQuery())).append("</query>")
-                        .append("</targetURL>");
-                }
-            }
+//            Hashtable extraRequestDataElements=SRWDatabase.parseElements(request.getExtraRequestData());
+//            String s=(String)extraRequestDataElements.get("returnTargetURL");
+//            log.info("returnTargetURL="+s);
+//            if(s!=null && !s.equals("false")) {
+//                String targetStr=(String)msgContext.getProperty("targetURL");
+//                log.info("targetStr="+targetStr);
+//                if(targetStr!=null && targetStr.length()>0) {
+//                    URL target=new URL(targetStr);
+//                    extraResponseData.append("<targetURL>")
+//                        .append("<host>").append(target.getHost()).append("</host>")
+//                        .append("<port>").append(target.getPort()).append("</port>")
+//                        .append("<path>").append(target.getPath()).append("</path>")
+//                        .append("<query>").append(Utilities.xmlEncode(target.getQuery())).append("</query>")
+//                        .append("</targetURL>");
+//                }
+//            }
 
             // set extraResponseData
             SRWDatabase.setExtraResponseData(response, extraResponseData.toString());
@@ -239,22 +238,22 @@ public class SRWSoapBindingImpl implements SRWPort {
                 else
                     extraResponseData.append("<databaseTitle>").append(dbname).append("</databaseTitle>");
 
-                Hashtable extraRequestDataElements=SRWDatabase.parseElements(request.getExtraRequestData());
-                String s=(String)extraRequestDataElements.get("returnTargetURL");
-                log.info("returnTargetURL="+s);
-                if(s!=null && !s.equals("false")) {
-                    String targetStr=(String)msgContext.getProperty("targetURL");
-                    log.info("targetStr="+targetStr);
-                    if(targetStr!=null && targetStr.length()>0) {
-                        URL target=new URL(targetStr);
-                        extraResponseData.append("<targetURL>")
-                            .append("<host>").append(target.getHost()).append("</host>")
-                            .append("<port>").append(target.getPort()).append("</port>")
-                            .append("<path>").append(target.getPath()).append("</path>")
-                            .append("<query>").append(Utilities.xmlEncode(target.getQuery())).append("</query>")
-                            .append("</targetURL>");
-                    }
-                }
+//                Hashtable extraRequestDataElements=SRWDatabase.parseElements(request.getExtraRequestData());
+//                String s=(String)extraRequestDataElements.get("returnTargetURL");
+//                log.info("returnTargetURL="+s);
+//                if(s!=null && !s.equals("false")) {
+//                    String targetStr=(String)msgContext.getProperty("targetURL");
+//                    log.info("targetStr="+targetStr);
+//                    if(targetStr!=null && targetStr.length()>0) {
+//                        URL target=new URL(targetStr);
+//                        extraResponseData.append("<targetURL>")
+//                            .append("<host>").append(target.getHost()).append("</host>")
+//                            .append("<port>").append(target.getPort()).append("</port>")
+//                            .append("<path>").append(target.getPath()).append("</path>")
+//                            .append("<query>").append(Utilities.xmlEncode(target.getQuery())).append("</query>")
+//                            .append("</targetURL>");
+//                    }
+//                }
 
                 // set extraResponseData
                 SRWDatabase.setExtraResponseData(response, extraResponseData.toString());
@@ -291,7 +290,7 @@ public class SRWSoapBindingImpl implements SRWPort {
         if(scanClause!=null) {
             ert.setScanClause(scanClause);
             try {
-                CQLTermNode node=Utilities.getFirstTerm(new CQLParser().parse(scanClause));
+                CQLTermNode node=Utilities.getFirstTerm(new CQLParser(CQLParser.V1POINT1).parse(scanClause));
                 if(node!=null) {
                     SearchClauseType sct=new SearchClauseType();
                     sct.setTerm(node.getTerm());
@@ -350,11 +349,11 @@ public class SRWSoapBindingImpl implements SRWPort {
         if(query!=null && query.length()>0) {
             ert.setQuery(query);
             try {
-                CQLNode root=new CQLParser().parse(query);
+                CQLNode root=cqlparser.parse(query);
                 ert.setXQuery(toOperandType(root));
             }
             catch (CQLParseException e) {
-                log.error(e,e);
+                log.error("parse problem: \""+query+"\"",e);
                 RelationType rt=new RelationType("", null);
                 SearchClauseType sct=new SearchClauseType("", rt, "");
                 OperandType ot=new OperandType();

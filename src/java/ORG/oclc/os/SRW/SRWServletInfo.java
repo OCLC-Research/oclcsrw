@@ -66,6 +66,29 @@ public class SRWServletInfo {
     public SRWServletInfo() {
     }
 
+    private void addMoreProperties(Properties properties, String propsfileName, String srwHome) {
+        InputStream is;
+        int i=propsfileName.lastIndexOf('.');
+        String root=propsfileName, suffix=null;
+        if(i>0) {
+            suffix=propsfileName.substring(i);
+            root=propsfileName.substring(0, i);
+        }
+        try {
+            for(i=2;;i++) {
+                propsfileName=root+"-"+Integer.toString(i)+suffix;
+                is=Utilities.openInputStream(propsfileName, srwHome, null);
+                properties.load(is);
+                is.close();
+            }
+        }
+        catch(java.io.IOException e) {
+            if(i==2)
+                log.info("Unable to load extra properties files after: "+propsfileName);
+            else
+                log.info("Loaded "+(i-2)+" extra properties files after: "+propsfileName);
+        }
+    }
     
     private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, Hashtable<String, String> dbnames, String path) {
         buildDbList(properties, dbVector, dbnames, path, null);
@@ -152,7 +175,7 @@ public class SRWServletInfo {
         }
         while(locales.hasMoreElements()) {
             l=(Locale)locales.nextElement();
-            log.error("looking for "+xsl+" in "+webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
+            log.debug("looking for "+xsl+" in "+webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             f=new File(webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -160,7 +183,7 @@ public class SRWServletInfo {
                 break;
             }
             log.debug("didn't find "+f.getAbsolutePath());
-            log.error("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
+            log.debug("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             f=new File(tomcatHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -168,14 +191,14 @@ public class SRWServletInfo {
                 break;
             }
             log.debug("didn't find "+f.getAbsolutePath());
-            log.error("looking in "+webappHome+"/"+base+"_"+l.getLanguage()+suffix);
+            log.debug("looking in "+webappHome+"/"+base+"_"+l.getLanguage()+suffix);
             f=new File(webappHome+"/"+base+"_"+l.getLanguage()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
                 realXsl=base+"_"+l.getLanguage()+suffix;
                 break;
             }
-            log.error("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+suffix);
+            log.debug("looking in "+tomcatHome+"/"+base+"_"+l.getLanguage()+suffix);
             f=new File(tomcatHome+"/"+base+"_"+l.getLanguage()+suffix);
             if(f.exists()) {
                 log.debug("found "+f.getAbsolutePath());
@@ -217,7 +240,27 @@ public class SRWServletInfo {
     public Properties getProperties() {
         return properties;
     }
-    
+
+    public StringBuilder getXmlHeaders(final HttpServletRequest req, final String defaultXsl) {
+        StringBuilder sb=new StringBuilder("<?xml version=\"1.0\" ?> \n");
+        String xsl=req.getParameter("xsl"); // version 1.0
+        if(xsl==null)
+            xsl=req.getParameter("stylesheet"); // version 1.1
+        if(xsl==null)
+            xsl=defaultXsl;
+        if(xsl!=null) {
+            String languages=req.getHeader("Accept-Language");
+            String realXsl=(String)realXsls.get(languages+'/'+xsl);
+            if(realXsl==null)
+                xsl=findRealXsl(languages, req.getLocales(), xsl);
+            else
+                xsl=realXsl;
+            sb.append("<?xml-stylesheet type=\"text/xsl\" href=\"")
+              .append(xsl).append("\"?>\n");
+        }
+        return sb;
+    }
+
     public boolean handleExplain(final HttpServletRequest request,
       final HttpServletResponse response, final MessageContext msgContext)
       throws org.apache.axis.AxisFault, IOException {
@@ -301,6 +344,7 @@ public class SRWServletInfo {
                 is=Utilities.openInputStream(propsfileName, srwHome, null);
                 properties.load(is);
                 is.close();
+                addMoreProperties(properties, propsfileName, srwHome);
             }
             catch(java.io.FileNotFoundException e) {
                 log.info("Unable to load properties file: "+propsfileName);
@@ -399,62 +443,64 @@ public class SRWServletInfo {
         String      dbname, t;
         String      path=request.getContextPath()+request.getServletPath();
         try {
-        PrintStream ps=new PrintStream(new FileOutputStream(indexDotHtmlLocation));
-        log.debug("writing index.html to: "+indexDotHtmlLocation);
-        ps.println("<!doctype html public \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">");
-        ps.println("<html>");
-        ps.println("<head>");
-        ps.println("<title>SRW/U Databases</title>");
-        ps.println("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />");
-        ps.println("<link href=\"http://www.oclc.org/common/css/basic_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
-        ps.println("<link href=\"http://www.oclc.org/common/css/researchproject_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
-        ps.println("<style type=\"text/css\">");
-        ps.println("<!--");
-        ps.println("table.layout { border: none; margin: 0; padding: 0; width: 100%; }");
-        ps.println("table.layout td { border: none; margin: 0; padding: 0; width: 50%; }");
-        ps.println("table.formtable th, table.formtable td { border-top: 1px solid #999; border-left: 1px solid #999; color: #333; padding: 4px; text-align: left; vertical-align: top; }");
-        ps.println("input.button { margin: 0; }");
-        ps.println("-->");
-        ps.println("</style>");
-        ps.println("</head>");
-        ps.println("<body>");
-        ps.println("<div align=\"center\">");
-        ps.println("<table cellspacing=\"0\" id=\"bnrResearch\">");
-        ps.println("<tr>");
-        ps.println("<td id=\"tdResearch\"><a href=\"http://www.oclc.org/research/\">A Project of OCLC Research</a></td>");
-        ps.println("<td id=\"tdOclc\"><a href=\"http://www.oclc.org/\">OCLC Online Computer Library Center</a></td>");
-        ps.println("</tr>");
-        ps.println("<tr>");
-        ps.println("<td id=\"tdProject\"><h2><a href=\"index.html\">SRW/U Databases</a></h2></td>");
-        ps.println("<td id=\"tdLogo\"><a href=\"http://www.oclc.org/research/software/srw\"><img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://www.oclc.org/research/images/badges/oclc_srwu.gif\"/></a></td>");
-        ps.println("</tr>");
-        ps.println("</table>");
-        ps.println("</div>");
-        ps.println("<table class=\"formtable\">");
-        if(dbVector.isEmpty())
-            buildDbList(properties, dbVector, dbnames, path);
-        Object[] dbList=dbVector.toArray();
-        Arrays.sort(dbList);
-        DbEntry de;
-        for(int i=0; i<dbList.length; i++) {
-            de=(DbEntry)dbList[i];
-            ps.print("<tr><th><a href=\""+de.getPath()+"/"+de.getName()+"\">");
-            if(de.getHost().length()>0)
-                ps.print(de.getHost()+": ");
-            ps.print(de.getName()+"</a></th>");
-            if(de.getDescription()!=null) {
-                ps.println("<td>"+de.getDescription()+"</td>");
+            PrintStream ps=new PrintStream(new FileOutputStream(indexDotHtmlLocation));
+            log.debug("writing index.html to: "+indexDotHtmlLocation);
+            ps.println("<!doctype html public \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">");
+            ps.println("<html>");
+            ps.println("<head>");
+            ps.println("<title>SRW/U Databases</title>");
+            ps.println("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />");
+            ps.println("<link href=\"http://www.oclc.org/common/css/basic_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
+            ps.println("<link href=\"http://www.oclc.org/common/css/researchproject_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
+            ps.println("<style type=\"text/css\">");
+            ps.println("<!--");
+            ps.println("table.layout { border: none; margin: 0; padding: 0; width: 100%; }");
+            ps.println("table.layout td { border: none; margin: 0; padding: 0; width: 50%; }");
+            ps.println("table.formtable th, table.formtable td { border-top: 1px solid #999; border-left: 1px solid #999; color: #333; padding: 4px; text-align: left; vertical-align: top; }");
+            ps.println("input.button { margin: 0; }");
+            ps.println("-->");
+            ps.println("</style>");
+            ps.println("</head>");
+            ps.println("<body>");
+            ps.println("<div align=\"center\">");
+            ps.println("<table cellspacing=\"0\" id=\"bnrResearch\">");
+            ps.println("<tr>");
+            ps.println("<td id=\"tdResearch\"><a href=\"http://www.oclc.org/research/\">A Project of OCLC Research</a></td>");
+            ps.println("<td id=\"tdOclc\"><a href=\"http://www.oclc.org/\">OCLC Online Computer Library Center</a></td>");
+            ps.println("</tr>");
+            ps.println("<tr>");
+            ps.println("<td id=\"tdProject\"><h2><a href=\"index.html\">SRW/U Databases</a></h2></td>");
+            ps.println("<td id=\"tdLogo\"><a href=\"http://www.oclc.org/research/software/srw\"><img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://www.oclc.org/research/images/badges/oclc_srwu.gif\"/></a></td>");
+            ps.println("</tr>");
+            ps.println("</table>");
+            ps.println("</div>");
+            ps.println("<table class=\"formtable\">");
+            if(dbVector.isEmpty())
+                buildDbList(properties, dbVector, dbnames, path);
+            Object[] dbList=dbVector.toArray();
+            Arrays.sort(dbList);
+            DbEntry de;
+            for(int i=0; i<dbList.length; i++) {
+                de=(DbEntry)dbList[i];
+                ps.print("<tr><th><a href=\""+de.getPath()+"/"+de.getName()+"\">");
+                if(de.getHost().length()>0)
+                    ps.print(de.getHost()+": ");
+                ps.print(de.getName()+"</a></th>");
+                if(de.getDescription()!=null) {
+                    ps.println("<td>"+de.getDescription()+"</td>");
+                }
             }
+            ps.println("</table>");
+            ps.println("<a href=\"http://www.oclc.org/research/software/srw\">");
+            ps.println("<img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://oaweb4server:8001/DesignDept/sandbox/osborne/badges/badge_srwu.gif\"/></p>");
+            ps.println("</a>");
+            ps.println("</body>");
+            ps.println("</html>");
+            ps.close();
         }
-        ps.println("</table>");
-        ps.println("<a href=\"http://www.oclc.org/research/software/srw\">");
-        ps.println("<img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://oaweb4server:8001/DesignDept/sandbox/osborne/badges/badge_srwu.gif\"/></p>");
-        ps.println("</a>");
-        ps.println("</body>");
-        ps.println("</html>");
-        ps.close();
+        catch(IOException e){
+            log.error(e,e);
         }
-        catch(IOException e){log.error(e,e);}
     }
     
     public boolean setSRWStuff(final HttpServletRequest request,
@@ -510,48 +556,16 @@ public class SRWServletInfo {
     public void writeXmlHeader(final PrintWriter printWriter,
       final MessageContext msgContext, final HttpServletRequest req,
       final String defaultXsl) {
-        printWriter.println("<?xml version=\"1.0\" ?> ");
-        String xsl=req.getParameter("xsl"); // version 1.0
-        if(xsl==null)
-            xsl=req.getParameter("stylesheet"); // version 1.1
-        if(xsl==null)
-            xsl=defaultXsl;
-        if(xsl!=null) {
-            String languages=req.getHeader("Accept-Language");
-            String realXsl=(String)realXsls.get(languages+'/'+xsl);
-            if(realXsl==null)
-                xsl=findRealXsl(languages, req.getLocales(), xsl);
-            else
-                xsl=realXsl;
-            printWriter.println("<?xml-stylesheet type=\"text/xsl\" "+
-                "href=\""+xsl+"\"?>");
-        }
+        printWriter.println(getXmlHeaders(req, defaultXsl));
     }        
 
 
     public void writeXmlHeader(final javax.servlet.ServletOutputStream sos,
       final MessageContext msgContext, final HttpServletRequest req,
       final String defaultXsl) {
-        StringBuffer sb=new StringBuffer();
-        sb.append("<?xml version=\"1.0\" ?> \n");
-        String xsl=req.getParameter("xsl"); // version 1.0
-        if(xsl==null)
-            xsl=req.getParameter("stylesheet"); // version 1.1
-        if(xsl==null)
-            xsl=defaultXsl;
-        if(xsl!=null) {
-            String languages=req.getHeader("Accept-Language");
-            String realXsl=(String)realXsls.get(languages+'/'+xsl);
-            if(realXsl==null)
-                xsl=findRealXsl(languages, req.getLocales(), xsl);
-            else
-                xsl=realXsl;
-            sb.append("<?xml-stylesheet type=\"text/xsl\" href=\"")
-              .append(xsl).append("\"?>\n");
-        }
         try {
-            sos.write(sb.toString().getBytes("utf-8"));
+            sos.write(getXmlHeaders(req, defaultXsl).toString().getBytes("utf-8"));
         }
         catch(Exception e){}
-    }        
+    }
 }
