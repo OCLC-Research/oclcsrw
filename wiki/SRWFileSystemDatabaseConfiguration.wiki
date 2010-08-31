@@ -1,0 +1,39 @@
+How to expose a bunch of records in a directory as Linked Data
+
+= Introduction =
+
+The SRWServer exposes the contents of a database a Linked Data.  But sometimes you only want to expose a single file as Linked Data.  An entire database for one record seems overkill.  Instead, we have a way to declare the contents of a directory to be an SRWDatabase and use the Linked Data (and AtomPub!) capabilities of the SRWServer without having to put the content in a database.
+
+
+= Details =
+
+Create a directory to hold your database records and the SRWDatabase.props file.  This will be your db.xxx.home directory in the SRWServer.props file
+
+Create an entry in your SRWServer.props file for the new database:
+    db.xxx.class=ORG.oclc.os.SRW.SRWFileSystemDatabase
+    db.xxx.home=c:/f-drive/dbs/xxx/
+    db.xxx.configuration=SRWDatabase.props
+
+Determine what webapp is going to expose your URIs and add the urlrewrite patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
+{{{
+    <rule>
+        <note>Send a 303 (SC_SEE_ALSO_REDIRECT) for Real World Objects</note>
+        <from>^/([0-9]+)$</from>
+        <to type="seeother-redirect">$1/</to>
+        </rule>
+        
+    <rule>
+        <note>
+            convert URI to SRW search
+            </note>
+        <condition type="method">GET</condition>
+        <from>^/([0-9]+)/$</from>
+        <set name="service">APP</set>
+        <to>/srw/search/xxx?query=oai.identifier+exact+%22$1.rdf%22</to>
+        </rule>
+}}}
+
+The second rule above would convert the URI /xxx/123/ to a search for a file with the name 123.rdf.  A more complicated name (like bogus_record_number_123.rdf) could be accommodated with a simple change to the `<to>` rule:
+{{{
+        <to>/srw/search/xxx?query=oai.identifier+exact+%22bogus_record_number_$1.rdf%22</to>
+}}}
