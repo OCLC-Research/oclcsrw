@@ -14,7 +14,7 @@ Create an entry in your SRWServer.props file for the new database:
     db.xxx.home=c:/f-drive/dbs/xxx/
     db.xxx.configuration=SRWDatabase.props
 
-Determine what webapp is going to expose your URIs and add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
+Determine what webapp is going to expose your URIs and put an SRW server with the urlrewrite filter in it. Add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
 {{{
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE urlrewrite PUBLIC "-//tuckey.org//DTD UrlRewrite 2.6//EN"
@@ -33,12 +33,12 @@ Determine what webapp is going to expose your URIs and add to urlrewrite.xml the
         <condition type="method">GET</condition>
         <from>^/([a-z]+)/$</from>
         <set name="service">APP</set>
-        <to>/srw/search/xxx?query=oai.identifier+exact+%22$1.rdf%22</to>
+        <to>/search/xxx?query=oai.identifier+exact+%22$1.rdf%22</to>
         </rule>
     </urlrewrite>
 }}}
 
 The second rule above would convert the URI /xxx/abc/ to a search for a file with the name abc.rdf.  A more complicated name (like bogus_record_number_abc.rdf) could be accommodated with a simple change to the `<to>` rule:
 {{{
-        <to>/srw/search/xxx?query=oai.identifier+exact+%22bogus_record_number_$1.rdf%22</to>
+        <to>/search/xxx?query=oai.identifier+exact+%22bogus_record_number_$1.rdf%22</to>
 }}}
