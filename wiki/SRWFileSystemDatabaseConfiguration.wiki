@@ -52,8 +52,7 @@ Determine what webapp is going to expose your URIs and create it by cloning your
     </filter-mapping> 
 }}}
 
-
- Add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
+Add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
 {{{
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE urlrewrite PUBLIC "-//tuckey.org//DTD UrlRewrite 2.6//EN"
