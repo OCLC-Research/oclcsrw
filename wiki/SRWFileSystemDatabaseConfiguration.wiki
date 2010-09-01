@@ -10,11 +10,50 @@ The SRWServer exposes the contents of a database a Linked Data.  But sometimes y
 Create a directory to hold your database records and the SRWDatabase.props file.  This will be your db.xxx.home directory in the SRWServer.props file
 
 Create an entry in your SRWServer.props file for the new database:
+{{{
     db.xxx.class=ORG.oclc.os.SRW.SRWFileSystemDatabase
     db.xxx.home=c:/f-drive/dbs/xxx/
     db.xxx.configuration=SRWDatabase.props
+}}}
 
-Determine what webapp is going to expose your URIs and put an SRW server with the urlrewrite filter in it. Add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
+Determine what webapp is going to expose your URIs and create it by cloning your srw webapp. Add the urlrewrite filter to the web.xml.
+{{{
+  <filter>
+    <filter-name>UrlRewriteFilter</filter-name>
+    <filter-class>org.tuckey.web.filters.urlrewrite.UrlRewriteFilter</filter-class>
+
+    <init-param>
+      <param-name>confReloadCheckInterval</param-name>
+      <param-value>300</param-value>
+      </init-param>
+
+    <init-param>
+      <param-name>logLevel</param-name>
+      <!--param-value>sysout:DEBUG</param-value-->
+      <param-value>LOG4J</param-value>
+      </init-param>
+
+    <init-param>
+      <param-name>statusEnabled</param-name>
+      <param-value>true</param-value>
+      </init-param>
+
+    <!-- you can change status path so that it does not conflict with your installed
+         apps (note, defaults to /rewrite-status) note, must start with / -->
+    <init-param>
+      <param-name>statusPath</param-name>
+      <param-value>/rewrite-status</param-value>
+      </init-param> 
+    </filter>
+
+  <filter-mapping>
+    <filter-name>UrlRewriteFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+    </filter-mapping> 
+}}}
+
+
+ Add to urlrewrite.xml the patterns that will take care of your RealWorldObjects (303 redirects) and your generic objects (redirects to SRW searches with Service=APP set).
 {{{
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE urlrewrite PUBLIC "-//tuckey.org//DTD UrlRewrite 2.6//EN"
