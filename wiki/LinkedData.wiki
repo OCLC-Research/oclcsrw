@@ -7,7 +7,7 @@ We are using this SRU server to deliver Linked Data for our [http://viaf.org VIA
 
 = Details =
 
-The way the magic works is that I have a [http://tuckey.org/urlrewrite/ urlrewrite filter] in front of my server and when it see a URI, it pulls the record key out of the URI and reformulates an SRU search on that key.  It also adds a parm to the request to tell my server to strip off the SRU response wrapper from the response, returning the bare record.  It can also set another parm telling the server what content type to set in the response.
+The way the magic works is that I have a [http://tuckey.org/urlrewrite/ urlrewrite filter] in front of my server and when it sees a URI, it pulls the record key out of the URI and reformulates an SRU search on that key.  It also adds a parm to the request to tell my server to strip off the SRU response wrapper from the response, returning the bare record.  It can also set another parm telling the server what content type to set in the response.
 
 = Features and How They Are Implemented =
 == Generic URI ==
