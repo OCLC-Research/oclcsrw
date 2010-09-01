@@ -80,3 +80,5 @@ The second rule above would convert the URI /xxx/abc/ to a search for a file wit
 {{{
         <to>/search/xxx?query=oai.identifier+exact+%22bogus_record_number_$1.rdf%22</to>
 }}}
+
+At this point, you have the contents of a file directory exposed as an SRW database.  Now follow the instructions for doing Linked Data in SRW.
