@@ -34,6 +34,7 @@ public class TestTermList extends TermList {
     public TestTermList() {
     }
 
+    @Override
     public TermType[] getTerms() {
         TermType  term[]=new TermType[6];
         term[0]=new TermType();
