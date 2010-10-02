@@ -91,6 +91,9 @@ public class TermTypeIterator implements Iterator {
                 }
                 catch(UnsupportedEncodingException e) {
                 }
+                catch(IOException e) {
+                    throw new NoSuchElementException(e.getMessage());
+                }
                 if(terms==null)
                     return false;
                 if(terms.length==1 && terms[0].getValue().equals(seed)) {
@@ -132,6 +135,9 @@ public class TermTypeIterator implements Iterator {
                 throw new NoSuchElementException(e.getMessage());
             }
             catch(UnsupportedEncodingException e){}
+            catch(IOException e) {
+                throw new NoSuchElementException(e.getMessage());
+            }
             if(terms==null) {
 //                System.out.println("url returned no terms: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+Utilities.urlEncode(seed)+
 //                          "%22&responsePosition=1"+
