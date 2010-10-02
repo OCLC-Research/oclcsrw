@@ -31,6 +31,7 @@ public class TestQueryResult extends QueryResult {
     public long getNumberOfRecords() {
         return 1;
     }
+    @Override
     public int getResultSetIdleTime() {
         return 0;
     }
