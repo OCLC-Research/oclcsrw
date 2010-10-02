@@ -29,11 +29,11 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.Hashtable;
+import java.util.HashMap;
 import java.util.Locale;
-import java.util.Vector;
 import java.util.Properties;
 import java.util.StringTokenizer;
 import javax.servlet.http.HttpServletRequest;
@@ -51,17 +51,19 @@ import org.apache.commons.logging.LogFactory;
 public class SRWServletInfo {
     public static final boolean isDebug=false;
     public static Log log=LogFactory.getLog(SRWServletInfo.class);
-    public static Hashtable<String, String> realXsls=new Hashtable<String, String>();
+    public static HashMap<String, String> realXsls=new HashMap<String, String>();
     public static String srwHome, tomcatHome, webappHome;
 
-    private boolean      madeIndexDotHtml=false, makeIndexDotHtml=false;
-    private Hashtable<String, String> extensions=new Hashtable<String, String>(), namespaces=new Hashtable<String, String>();
-    public  Hashtable<String, String> dbnames=new Hashtable<String, String>();
+    static private boolean madeIndexDotHtmlAlready=false;
+
+    private boolean      makeIndexDotHtml=false;
+    private HashMap<String, String> extensions=new HashMap<String, String>(), namespaces=new HashMap<String, String>();
+    public  HashMap<String, String> dbnames=new HashMap<String, String>();
     public int           pathInfoIndex=100, resultSetIdleTime=300; // time in seconds
     private Properties   properties=new Properties();
     public String        databaseURL, defaultDatabase, indexDotHtmlLocation=null,
                          propsfileName;
-    public Vector<DbEntry> dbVector=new Vector<DbEntry>();
+    public ArrayList<DbEntry> dbVector=new ArrayList<DbEntry>();
 
     public SRWServletInfo() {
     }
@@ -90,11 +92,11 @@ public class SRWServletInfo {
         }
     }
     
-    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, Hashtable<String, String> dbnames, String path) {
+    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbVector, HashMap<String, String> dbnames, String path) {
         buildDbList(properties, dbVector, dbnames, path, null);
     }
 
-    private static void buildDbList(Properties properties, Vector<DbEntry> dbVector, Hashtable<String, String> dbnames, String path, String remote) {
+    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbVector, HashMap<String, String> dbnames, String path, String remote) {
         Enumeration enumer=properties.propertyNames();
         String      fileName, dbHome, dbName, description, hidden=null, t;
         while(enumer.hasMoreElements()) {
@@ -399,7 +401,7 @@ public class SRWServletInfo {
                   s.equals("1")) {
                     Enumeration enumer=properties.propertyNames();
                     int         offset;
-                    String      dbname, list=new String(","), t;
+                    String      dbname, list=",", t;
                     while(enumer.hasMoreElements()) {
                         t=(String)enumer.nextElement();
                         if(t.startsWith("db.")) {
@@ -439,8 +441,9 @@ public class SRWServletInfo {
     
     
     public void makeIndexDotHtml(Properties properties, HttpServletRequest request) {
-        Enumeration enumer;
-        String      dbname, t;
+        if(madeIndexDotHtmlAlready)
+            return;
+        madeIndexDotHtmlAlready=true;
         String      path=request.getContextPath()+request.getServletPath();
         try {
             PrintStream ps=new PrintStream(new FileOutputStream(indexDotHtmlLocation));
@@ -523,10 +526,8 @@ public class SRWServletInfo {
             return false;
         }
         db.getExplainRecord(request);
-        if(makeIndexDotHtml && !madeIndexDotHtml) {
+        if(makeIndexDotHtml && !madeIndexDotHtmlAlready)
             makeIndexDotHtml(properties, request);
-            madeIndexDotHtml=true;  // once is enough
-        }
         
         msgContext.setProperty("dbname", dbname);
         msgContext.setProperty("db", db);
