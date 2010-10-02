@@ -23,7 +23,6 @@ package ORG.oclc.os.SRW;
 
 import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator;
 import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator.VariantSpec;
-import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.RecordType;
 import gov.loc.www.zing.srw.RecordsType;
 import gov.loc.www.zing.srw.StringOrXmlFragment;
@@ -31,6 +30,7 @@ import gov.loc.www.zing.srw.TermsType;
 import gov.loc.www.zing.srw.diagnostic.DiagnosticType;
 import gov.loc.www.zing.srw.DiagnosticsType;
 import gov.loc.www.zing.srw.ExplainResponseType;
+import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
@@ -45,10 +45,12 @@ import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.Properties;
@@ -56,6 +58,8 @@ import java.util.Random;
 import java.util.StringTokenizer;
 import java.util.Timer;
 import java.util.Vector;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.ServletException;
 import javax.xml.parsers.DocumentBuilder;
@@ -119,21 +123,21 @@ public abstract class SRWDatabase {
 
     public static Hashtable<String, String> badDbs=new Hashtable<String, String>();
     public static Hashtable<String, LinkedList<SRWDatabase>> dbs=new Hashtable<String, LinkedList<SRWDatabase>>();
-    public static Hashtable<String, QueryResult> oldResultSets=new Hashtable<String, QueryResult>();
-    public static Hashtable<String, Long> timers=new Hashtable<String, Long>();
+    public static final Hashtable<String, QueryResult> oldResultSets=new Hashtable<String, QueryResult>();
+    public static final Hashtable<String, Long> timers=new Hashtable<String, Long>();
 
-    private static HouseKeeping houseKeeping=null;
     public static Properties srwProperties;
     public static String servletContext, srwHome;
-    private static Timer timer=new Timer();
+    private static final Timer timer=new Timer();
 
     static {
-        houseKeeping=new HouseKeeping(timers, oldResultSets);
-        timer.schedule(houseKeeping, 60000L, 60000L);
+        timer.schedule(new HouseKeeping(timers, oldResultSets), 60000L, 60000L);
     }
     private boolean returnResultSetId=true;
+    private Matcher extractRecordIdFromUriPatternMatcher;
     private Random rand=new Random();
     public ContentTypeNegotiator conneg=null;
+    public HashMap<String, String> contentLocations=new HashMap<String, String>();
     public HashMap<String, String> mediaTypes=new HashMap<String, String>();
     public HashMap<String, String> recordSchemas=new HashMap<String, String>();
     public HttpHeaderSetter httpHeaderSetter=null;
@@ -157,11 +161,11 @@ public abstract class SRWDatabase {
                           explainRecord=null, schemaInfo;
     
     
-    public boolean add(byte[] record) {
+    public String add(byte[] record) {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    private void addSupports(String s, StringBuffer sb) {
+    private void addSupports(String s, StringBuilder sb) {
         StringTokenizer st=new StringTokenizer(s, " =");
         if(st.countTokens()<2)
             return;
@@ -178,7 +182,7 @@ public abstract class SRWDatabase {
     }
 
     public Transformer addTransformer(String schemaName, String schemaID,
-      String transformerFileName, Vector parameterNames, Vector parameterValues)
+      String transformerFileName, ArrayList parameterNames, ArrayList parameterValues)
       throws FileNotFoundException, TransformerConfigurationException {
         if(schemaID!=null) {
             schemas.put(schemaName, schemaID);
@@ -442,7 +446,7 @@ public abstract class SRWDatabase {
     }
 
 
-    public boolean delete(String recordKey) {
+    public boolean delete(String recordID) {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
@@ -754,6 +758,7 @@ public abstract class SRWDatabase {
                         log.debug("making RecordIterator, startPoint="+startPoint+", schemaID="+schemaID);
                         list=result.recordIterator(startPoint, numRecs, schemaID, request.getExtraRequestData());
                     } catch (InstantiationException e) {
+                        log.error(e, e);
                         diagnostic(SRWDiagnostic.GeneralSystemError,
                             e.getMessage(), response);
                     }
@@ -906,12 +911,22 @@ public abstract class SRWDatabase {
     }
 
 
+    public String extractRecordIdFromUri(String uri) {
+        log.info("uri="+uri);
+        extractRecordIdFromUriPatternMatcher.reset(uri);
+        if(extractRecordIdFromUriPatternMatcher.find()) {
+            return extractRecordIdFromUriPatternMatcher.group(1);
+        }
+        log.info("recordID not found.  Pattern="+extractRecordIdFromUriPatternMatcher.pattern());
+        return null;
+    }
+
     public String extractSortField(Object record) {
         return null;
     }
 
     public String getConfigInfo() {
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         sb.append("        <configInfo>\n");
         sb.append("          <default type=\"maximumRecords\">").append(getMaximumRecords()).append("</default>\n");
         sb.append("          <default type=\"numberOfRecords\">").append(getNumberOfRecords()).append("</default>\n");
@@ -935,7 +950,7 @@ public abstract class SRWDatabase {
 
 
     public String getDatabaseInfo() {
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         sb.append("        <databaseInfo>\n");
         if(dbProperties!=null) {
             String t=dbProperties.getProperty("databaseInfo.title");
@@ -1066,7 +1081,7 @@ public abstract class SRWDatabase {
     
     
     public String getMetaInfo() {
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         sb.append("        <metaInfo>\n");
         if(dbProperties!=null) {
             String t=dbProperties.getProperty("metaInfo.dateModified");
@@ -1117,13 +1132,13 @@ public abstract class SRWDatabase {
         return null;
     }
 
-    public static Vector getResultSetIds(CQLNode root) throws SRWDiagnostic {
-        Vector<String> resultSetIds=new Vector<String>();
+    public static ArrayList getResultSetIds(CQLNode root) throws SRWDiagnostic {
+        ArrayList<String> resultSetIds=new ArrayList<String>();
         getResultSetIds(root, resultSetIds);
         return resultSetIds;
     }
     
-    public static void getResultSetIds(CQLNode root, Vector<String> resultSetIds) throws SRWDiagnostic {
+    public static void getResultSetIds(CQLNode root, ArrayList<String> resultSetIds) throws SRWDiagnostic {
         if(root instanceof CQLBooleanNode) {
             CQLBooleanNode cbn=(CQLBooleanNode)root;
             getResultSetIds(cbn.left, resultSetIds);
@@ -1209,13 +1224,13 @@ public abstract class SRWDatabase {
 
             // get schema transformers
             String          firstSchema=null, xmlSchemaList=dbProperties.getProperty("xmlSchemas");
-            StringBuffer    schemaInfoBuf=new StringBuffer("        <schemaInfo>\n");
+            StringBuilder    schemaInfoBuf=new StringBuilder("        <schemaInfo>\n");
             StringTokenizer st;
             if(xmlSchemaList!=null) {
                 Enumeration propertyNames;
                 String      name, schemaIdentifier, schemaName, transformerName,
                             value;
-                Vector<String> parms, values;
+                ArrayList<String> parms, values;
                 st=new StringTokenizer(xmlSchemaList, ", \t");
                 log.info("xmlSchemaList="+xmlSchemaList);
                 while(st.hasMoreTokens()) {
@@ -1230,8 +1245,8 @@ public abstract class SRWDatabase {
                         // is associated with the bare schemaName
                         transformerName=dbProperties.getProperty(schemaName);
                     }
-                    parms=new Vector<String>();
-                    values=new Vector<String>();
+                    parms=new ArrayList<String>();
+                    values=new ArrayList<String>();
                     propertyNames=dbProperties.propertyNames();
                     while(propertyNames.hasMoreElements()) {
                         name=(String)propertyNames.nextElement();
@@ -1315,7 +1330,7 @@ public abstract class SRWDatabase {
             conneg=new ContentTypeNegotiator();
             Enumeration enumer = dbProperties.keys();
             int offset;
-            String key, mediaType, mimeType, name, recordSchema, value;
+            String contentLocation, key, mediaType, mimeType, name, recordSchema, value;
             VariantSpec vs;
             while(enumer.hasMoreElements()) {
                 key=(String)enumer.nextElement();
@@ -1343,8 +1358,17 @@ public abstract class SRWDatabase {
                         recordSchemas.put(mediaType, recordSchema);
                         log.info("mediaType: "+mediaType+" requires recordSchema: "+dbProperties.getProperty(name+".recordSchema"));
                     }
+                    contentLocation=dbProperties.getProperty(name+".ContentLocation");
+                    if(contentLocation!=null) {
+                        contentLocations.put(mediaType, contentLocation);
+                        log.info("mediaType: "+mediaType+" ContentLocation: "+contentLocation);
+                    }
                 }
             }
+
+            String patternStr=dbProperties.getProperty("extractRecordIdFromUriPattern");
+            if(patternStr!=null)
+                extractRecordIdFromUriPatternMatcher=Pattern.compile(patternStr).matcher("");
         }
         log.debug("Exit: private initDB");
     }
@@ -1387,9 +1411,9 @@ public abstract class SRWDatabase {
         sb.append("      <explain authoritative=\"true\" xmlns=\"http://explain.z3950.org/dtd/2.0/\">\n");
         sb.append("        <serverInfo protocol=\"SRW/U\">\n");
         if(request!=null) {
-            sb.append("          <host>"+request.getServerName()+"</host>\n");
+            sb.append("          <host>").append(request.getServerName()).append("</host>\n");
             urlStr.append("http://").append(request.getServerName());
-            sb.append("          <port>"+request.getServerPort()+"</port>\n");
+            sb.append("          <port>").append(request.getServerPort()).append("</port>\n");
             if(request.getServerPort()!=80)
                 urlStr.append(":").append(request.getServerPort());
             long lastUpdated=getLastUpdated();
@@ -1469,7 +1493,7 @@ public abstract class SRWDatabase {
 
     protected String makeResultSetID() {
         int          i, j;
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         for(i=0; i<6; i++) {
             j=rand.nextInt(35);
             if(j<26)
@@ -1486,7 +1510,7 @@ public abstract class SRWDatabase {
      */
     static protected void makeUnqualifiedIndexes(Properties props) {
         Enumeration enumer=props.propertyNames();
-        Hashtable<String, String> newIndexes=new Hashtable<String, String>();
+        HashMap<String, String> newIndexes=new HashMap<String, String>();
         int         start;
         String      name, newName, value;
         while(enumer.hasMoreElements()) {
@@ -1506,9 +1530,9 @@ public abstract class SRWDatabase {
                 }
             }
         }
-        enumer=newIndexes.keys();
-        while(enumer.hasMoreElements()) {
-            name=(String)enumer.nextElement();
+        Iterator<String> iter = newIndexes.keySet().iterator();
+        while(iter.hasNext()) {
+            name=iter.next();
             value=newIndexes.get(name);
             if(value!=null) {
                 log.debug("adding: "+name+"="+value);
@@ -1541,8 +1565,8 @@ public abstract class SRWDatabase {
     }
 
 
-    public static Hashtable<String, String> parseElements(ExtraDataType extraData) {
-        Hashtable<String, String> extraDataTable = new Hashtable<String, String>();
+    public static HashMap<String, String> parseElements(ExtraDataType extraData) {
+        HashMap<String, String> extraDataTable = new HashMap<String, String>();
         if (extraData!=null) {
             MessageElement[] elems = extraData.get_any();
             NameValuePair    nvp;
@@ -1570,7 +1594,7 @@ public abstract class SRWDatabase {
         log.debug("done synchronize #3 on queue");
     }
 
-    public boolean replace(byte[] record) {
+    public boolean replace(String recordID, byte[] record) {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
@@ -1591,7 +1615,7 @@ public abstract class SRWDatabase {
 
     static public void setExtraRecordData(RecordType rt, String extraData) {
         ExtraDataType edt=rt.getExtraRecordData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
+        StringBuilder extraResponseData = new StringBuilder("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
@@ -1605,7 +1629,7 @@ public abstract class SRWDatabase {
 
     static public void setExtraResponseData(ScanResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
+        StringBuilder extraResponseData = new StringBuilder("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
@@ -1619,7 +1643,7 @@ public abstract class SRWDatabase {
 
     static public void setExtraResponseData(SearchRetrieveResponseType response, String extraData) {
         ExtraDataType edt=response.getExtraResponseData();
-        StringBuffer extraResponseData = new StringBuffer("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
+        StringBuilder extraResponseData = new StringBuilder("<extraData xmlns=\"http://oclc.org/srw/extraData\">");
         if(edt!=null) {
             MessageElement[] elems = edt.get_any();
             String currentExtraData=elems[0].toString();
@@ -1648,7 +1672,7 @@ public abstract class SRWDatabase {
 
     @Override
     public String toString() {
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         sb.append("Database ").append(dbname).append(" of type ")
           .append(this.getClass().getName());
         return sb.toString();
