@@ -8,38 +8,15 @@
 package ORG.oclc.os.SRW;
 
 import junit.framework.*;
-import com.Ostermiller.util.CGIParser;
-import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.net.URL;
-import java.util.Enumeration;
-import javax.xml.namespace.QName;
-import org.apache.axis.MessageContext;
-import org.apache.axis.encoding.DeserializationContext;
-import org.apache.axis.encoding.SerializationContext;
-import org.apache.axis.encoding.Serializer;
-import org.apache.axis.message.RPCElement;
-import org.apache.axis.message.SOAPEnvelope;
-import org.apache.axis.server.AxisServer;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.xml.sax.InputSource;
-import org.z3950.zing.cql.CQLBooleanNode;
 import org.z3950.zing.cql.CQLNode;
 import org.z3950.zing.cql.CQLParser;
-import org.z3950.zing.cql.CQLTermNode;
 
 /**
  *
@@ -108,9 +85,9 @@ public class UtilitiesTest extends TestCase {
         SearchRetrieveRequestType srreq=new SearchRetrieveRequestType();
         srreq.setQuery("dog or cat and mouse");
         System.out.println("objToSru: "+Utilities.objToSru(srreq));
-        assertEquals("operation=searchRetrieve&query=\"dog+or+cat+and+mouse\"", Utilities.objToSru(srreq));
+        assertEquals("operation=searchRetrieve&query=\"dog%20or%20cat%20and%20mouse\"", Utilities.objToSru(srreq));
         srreq.setResultSetTTL(new NonNegativeInteger("123"));
-        assertEquals("operation=searchRetrieve&query=\"dog+or+cat+and+mouse\"&resultSetTTL=123", Utilities.objToSru(srreq));
+        assertEquals("operation=searchRetrieve&query=\"dog%20or%20cat%20and%20mouse\"&resultSetTTL=123", Utilities.objToSru(srreq));
         
         ScanRequestType sreq=new ScanRequestType();
         sreq.setScanClause("dog");
@@ -182,118 +159,20 @@ public class UtilitiesTest extends TestCase {
     }
 
     /**
-     * Test of openInputStream method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testOpenInputStream() throws Exception {
-        System.out.println("openInputStream");
-        
-        String fileName = "";
-        String directory1 = "";
-        String directory2 = "";
-        
-        InputStream expResult = null;
-        InputStream result = Utilities.openInputStream(fileName, directory1, directory2);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
-     * Test of sruToObj method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testSruToObj() throws Exception {
-        System.out.println("sruToObj");
-        
-        String sruRequest = "";
-        Utilities instance = new Utilities();
-        
-        Object expResult = null;
-        Object result = instance.sruToObj(sruRequest);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
-     * Test of sruToXml method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testSruToXml() throws Exception {
-        System.out.println("sruToXml");
-        
-        String sruRequest = "";
-        Utilities instance = new Utilities();
-        
-        String expResult = "";
-        String result = instance.sruToXml(sruRequest);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
-     * Test of unUrlEncode method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testUnUrlEncode() {
-        System.out.println("unUrlEncode");
-        
-        String s = "";
-        
-        String expResult = "";
-        String result = Utilities.unUrlEncode(s);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
      * Test of unXmlEncode method, of class ORG.oclc.os.SRW.Utilities.
      */
     public void testUnXmlEncode() {
         System.out.println("unXmlEncode");
-        
-        String s = "";
-        
-        String expResult = "";
-        String result = Utilities.unXmlEncode(s);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
 
-    /**
-     * Test of urlEncode method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testUrlEncode() {
-        System.out.println("urlEncode");
-        
-        String s = "";
-        
-        String expResult = "";
-        String result = Utilities.urlEncode(s);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
-     * Test of writeEncoded method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testWriteEncoded() throws Exception {
-        System.out.println("writeEncoded");
-        
-        java.io.Writer writer = null;
-        String xmlString = "";
-        
-        Utilities.writeEncoded(writer, xmlString);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
+        assertEquals("&amp", Utilities.unXmlEncode("&amp"));
+        assertEquals("&", Utilities.unXmlEncode("&amp;"));
+        assertEquals("a&a", Utilities.unXmlEncode("a&amp;a"));
+        assertEquals("&Dagger;", Utilities.unXmlEncode("&amp;Dagger;"));
+        assertEquals("'", Utilities.unXmlEncode("&apos;"));
+        assertEquals(">", Utilities.unXmlEncode("&gt;"));
+        assertEquals("<", Utilities.unXmlEncode("&lt;"));
+        assertEquals("\"", Utilities.unXmlEncode("&quot;"));
+        assertEquals(" ", Utilities.unXmlEncode("&#x20;"));
     }
 
     /**
@@ -301,47 +180,6 @@ public class UtilitiesTest extends TestCase {
      */
     public void testXmlEncode() {
         System.out.println("xmlEncode");
-        
-        String s = "";
-        
-        String expResult = "";
-        String result = Utilities.xmlEncode(s);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
+        assertEquals("&amp;Dagger;", Utilities.xmlEncode("&Dagger;"));
     }
-
-    /**
-     * Test of xmlToObj method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testXmlToObj() throws Exception {
-        System.out.println("xmlToObj");
-        
-        String xml = "";
-        
-        Object expResult = null;
-        Object result = Utilities.xmlToObj(xml);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-
-    /**
-     * Test of xmlToSru method, of class ORG.oclc.os.SRW.Utilities.
-     */
-    public void testXmlToSru() throws Exception {
-        System.out.println("xmlToSru");
-        
-        String xml = "";
-        
-        String expResult = "";
-        String result = Utilities.xmlToSru(xml);
-        assertEquals(expResult, result);
-        
-        // TODO review the generated test code and remove the default call to fail.
-        fail("The test case is a prototype.");
-    }
-    
 }
