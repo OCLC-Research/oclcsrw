@@ -72,8 +72,8 @@ public class Utilities {
     }
 
     public static String byteArrayToString(byte array[], int offset, int length) {
-        StringBuffer str = new StringBuffer();
-        StringBuffer alpha = new StringBuffer();
+        StringBuilder str = new StringBuilder();
+        StringBuilder alpha = new StringBuilder();
         int stopat = length + offset;
         char c;
         int i, type;
@@ -96,7 +96,7 @@ public class Utilities {
 
 
             if ((i%16)==0) {
-                str.append("  " + alpha + newLine);
+                str.append("  ").append(alpha).append(newLine);
                 alpha.setLength(0);
             }
         }
@@ -104,7 +104,7 @@ public class Utilities {
             str.append("   ");
         offset = 0;
 
-        str.append("  " + alpha + newLine);
+        str.append("  ").append(alpha).append(newLine);
         str.append(newLine);
 
         return str.toString();
@@ -114,15 +114,15 @@ public class Utilities {
     public static String escapeBackslash(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='\\') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("\\\\");
@@ -191,15 +191,15 @@ public class Utilities {
     public static String hex07Encode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c<0xa) {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&#x").append(Integer.toHexString(c)).append(';');
@@ -214,7 +214,7 @@ public class Utilities {
     }
 
     public static String objToSru(Object obj) {
-        StringBuffer sru=new StringBuffer();
+        StringBuilder sru=new StringBuilder();
         if(obj instanceof SearchRetrieveRequestType) {
             SearchRetrieveRequestType request=(SearchRetrieveRequestType)obj;
             sru.append("operation=searchRetrieve");
@@ -310,7 +310,7 @@ public class Utilities {
         Enumeration enumer=parser.getParameterNames();
         ScanRequestType request=new ScanRequestType();
         String name, value;
-        StringBuffer extraData=new StringBuffer();
+        StringBuilder extraData=new StringBuilder();
         while(enumer.hasMoreElements()) {
             name=(String)enumer.nextElement();
             if(name.equals("maximumTerms"))
@@ -337,7 +337,7 @@ public class Utilities {
         Enumeration enumer=parser.getParameterNames();
         SearchRetrieveRequestType request=new SearchRetrieveRequestType();
         String name, value;
-        StringBuffer extraData=new StringBuffer();
+        StringBuilder extraData=new StringBuilder();
         while(enumer.hasMoreElements()) {
             name=(String)enumer.nextElement();
             if(name.equals("maximumRecords"))
@@ -383,56 +383,36 @@ public class Utilities {
         return(objToXml(sruToObj(sruRequest)));
     }
 
-    public static String readURL(String urlStr) {
+    public static String readURL(String urlStr) throws IOException {
         return readURL(urlStr, false);
     }
 
-    public static String readURL(String urlStr, boolean debug) {
+    public static String readURL(String urlStr, boolean debug) throws IOException {
         if(debug)
             System.out.print("    trying: "+urlStr+"\n");
         URL url=null;
-        try {
-            url=new URL(urlStr);
-        }
-        catch(java.net.MalformedURLException e) {
-            System.out.print("test failed: using URL: ");System.out.print(e.getMessage());System.out.print('\n');
-            return null;
-        }
+        url=new URL(urlStr);
         HttpURLConnection huc=null;
-        try {
-            huc=(HttpURLConnection)url.openConnection();
-        }
-        catch(IOException e) {
-            System.out.print("test failed: using URL: ");System.out.print(e.getMessage());System.out.print('\n');
-            return null;
-        }
+        huc=(HttpURLConnection)url.openConnection();
         String contentType=huc.getContentType();
         if(contentType==null || contentType.indexOf("text/xml")<0) {
             System.out.print("*** Warning ***  Content-Type not set to text/xml");System.out.print('\n');
             System.out.print("    Content-type: ");System.out.print(contentType);System.out.print('\n');
         }
         InputStream urlStream=null;
-        try {
-            urlStream=huc.getInputStream();
-        }
-        catch(java.io.IOException e) {
-            e.printStackTrace();
-            System.out.print("test failed: opening URL: ");System.out.print(e.getMessage());System.out.print('\n');
-            return null;
-        }
+        urlStream=huc.getInputStream();
         BufferedReader in = new BufferedReader(
                                 new InputStreamReader(
                                 urlStream));
         boolean xml=true;
         String href=null, inputLine=null;
-        StringBuffer content=new StringBuffer(), stylesheet=null;
+        StringBuilder content=new StringBuilder(), stylesheet=null;
         Transformer transformer=null;
         try {
             inputLine=in.readLine();
         }
         catch(java.io.IOException e) {
-            System.out.print("test failed: reading first line of response: ");System.out.print(e.getMessage());System.out.print('\n');
-            return null;
+            throw new IOException("failed: reading first line of response: ", e);
         }
         if(inputLine==null) {
             System.out.print("test failed: No input read from URL");System.out.print('\n');
@@ -457,8 +437,7 @@ public class Utilities {
                 inputLine=in.readLine();
             }
             catch(java.io.IOException e) {
-                System.out.print("test failed: reading response: ");System.out.print(e.getMessage());System.out.print('\n');
-                return null;
+                throw new IOException("failed: reading response: ");
             }
 
             content.append(inputLine);
@@ -484,7 +463,6 @@ public class Utilities {
             }
             catch(javax.xml.transform.TransformerException e) {
                 System.out.print("unable to apply stylesheet '");System.out.print(href);System.out.print("'to response: ");System.out.print(e.getMessage());System.out.print('\n');
-                e.printStackTrace();
             }
         }
         return contentStr;
@@ -493,15 +471,15 @@ public class Utilities {
     public static String unUrlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='+') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append(' ');
@@ -509,9 +487,9 @@ public class Utilities {
             else if(c=='%') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append((char)Integer.parseInt(s.substring(i+1, i+3), 16));
@@ -530,7 +508,7 @@ public class Utilities {
     public static String unXmlEncode(String s) {
         boolean      changed=false;
         char         c, c1;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='&') {
@@ -540,9 +518,9 @@ public class Utilities {
                         if(s.length()>i+5 && s.charAt(i+2)=='x' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append((char)Integer.parseInt(s.substring(i+3, i+5), 16));
@@ -551,9 +529,9 @@ public class Utilities {
                         else if(s.length()>i+6 && s.charAt(i+2)=='x' && s.charAt(i+6)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append((char)Integer.parseInt(s.substring(i+3, i+6), 16));
@@ -562,9 +540,9 @@ public class Utilities {
                         else if(s.length()>i+7 && s.charAt(i+2)=='x' && s.charAt(i+7)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append((char)Integer.parseInt(s.substring(i+3, i+7), 16));
@@ -576,9 +554,9 @@ public class Utilities {
                            s.charAt(i+4)=='s' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append('\'');
@@ -588,9 +566,9 @@ public class Utilities {
                           s.charAt(i+4)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append('&');
@@ -601,9 +579,9 @@ public class Utilities {
                         if(s.length()>i+3 && s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append('>');
@@ -614,9 +592,9 @@ public class Utilities {
                         if(s.length()>i+3 && s.charAt(i+2)=='t' && s.charAt(i+3)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append('<');
@@ -628,9 +606,9 @@ public class Utilities {
                            s.charAt(i+4)=='t' && s.charAt(i+5)==';') {
                             if(!changed) {
                                 if(i>0)
-                                    sb=new StringBuffer(s.substring(0, i));
+                                    sb=new StringBuilder(s.substring(0, i));
                                 else
-                                    sb=new StringBuffer();
+                                    sb=new StringBuilder();
                                 changed=true;
                             }
                             sb.append('"');
@@ -655,16 +633,16 @@ public class Utilities {
     public static String urlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c==' ' || c=='+' || c=='<' || c=='&' || c=='>' || c=='"' ||
                c=='\'' || c=='#' || c>0x7f) {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append('%').append(Integer.toHexString(c));
@@ -687,16 +665,16 @@ public class Utilities {
     public static String urlParameterEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c==' ' || c=='+' || c=='<' || c=='&' || c=='>' || c=='"' ||
                c=='\'' || c=='=' || c>0x7f) {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append('%').append(Integer.toHexString(c));
@@ -771,15 +749,15 @@ public class Utilities {
     public static String xmlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuffer sb=null;
+        StringBuilder sb=null;
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c<0xa) {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&#x").append(Integer.toHexString(c)).append(';');
@@ -787,9 +765,9 @@ public class Utilities {
             else if(c=='<') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&lt;");
@@ -797,9 +775,9 @@ public class Utilities {
             else if(c=='>') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&gt;");
@@ -807,9 +785,9 @@ public class Utilities {
             else if(c=='"') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&quot;");
@@ -817,9 +795,9 @@ public class Utilities {
             else if(c=='&') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&amp;");
@@ -827,9 +805,9 @@ public class Utilities {
             else  if(c=='\'') {
                 if(!changed) {
                     if(i>0)
-                        sb=new StringBuffer(s.substring(0, i));
+                        sb=new StringBuilder(s.substring(0, i));
                     else
-                        sb=new StringBuffer();
+                        sb=new StringBuilder();
                     changed=true;
                 }
                 sb.append("&apos;");
@@ -885,6 +863,7 @@ public class Utilities {
                 throw new ParseException("Unrecognized XML object: "+objectType, 0);
         }
         catch(Exception e) {
+            log.error("XML: "+xml);
             log.error(e, e);
             throw new ParseException(e.getMessage(), 0);
         }
