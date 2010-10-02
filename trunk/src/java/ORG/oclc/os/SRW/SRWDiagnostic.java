@@ -180,6 +180,7 @@ public class SRWDiagnostic extends Exception {
     public static final int UnsupportedCombinationOfRelationAndIndex=22;
     public static final int EmptyTermUnsupported=27;
     public static final int MaskedWordsTooShort=29;
+    public static final int UnsupportedBooleanOperator=37;
     public static final int ProximityNotSupported=39;
     public static final int ResultSetDoesNotExist=51;
     public static final int FirstRecordPositionOutOfRange=61;
