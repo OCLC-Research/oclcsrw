@@ -6,48 +6,44 @@
             <name>SRW</name>
             <minimum-ant-version>1.6</minimum-ant-version>
             <web-module-libraries>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.axis.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.commons-discovery.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.commons-logging.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.cql-java.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.jaxrpc.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.log4j.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.ostermillerutils.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.saaj.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.servlet-api.jar}</file>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.wsdl4j.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
                 </library>
-                <library>
+                <library dirs="200">
                     <file>${file.reference.xalan.jar}</file>
-                    <path-in-war>WEB-INF/lib</path-in-war>
+                </library>
+                <library dirs="200">
+                    <file>${file.reference.org-netbeans-modules-java-j2seproject-copylibstask.jar}</file>
+                </library>
+                <library dirs="200">
+                    <file>${file.reference.icu4j.jar}</file>
                 </library>
             </web-module-libraries>
             <web-module-additional-libraries/>
