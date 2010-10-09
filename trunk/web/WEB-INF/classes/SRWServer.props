@@ -63,3 +63,7 @@ db.lucenetest.home=c:/oclcsrwlucene-read-only/lucene
 #db.SciFi.class=ORG.oclc.os.SRW.Pears.SRWPearsDatabase
 #db.SciFi.home=f:/dbs/scifi/
 #db.SciFi.configuration=SRWDatabase.props
+
+#db.lcnaf.class=ORG.oclc.os.SRW.SRWFileSystemDatabase
+#db.lcnaf.home=c:/dbs/lcnaf/
+#db.lcnaf.configuration=SRWDatabase.props
