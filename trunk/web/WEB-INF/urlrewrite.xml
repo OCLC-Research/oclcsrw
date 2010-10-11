@@ -19,7 +19,7 @@
 
     <rule>
         <note>Send a 303 (SC_SEE_ALSO_REDIRECT) for Real World Objects</note>
-        <from>^/([a-z]+)$</from>
+        <from>^/([a-z0-9]+)$</from>
         <to type="seeother-redirect">$1/</to>
         </rule>
 
