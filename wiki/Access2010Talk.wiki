@@ -31,8 +31,10 @@ Bounce your tomcat.  If everything has worked right, then this URL should get yo
 I decided to expose the records as `http://localhost:8080/lcnaf/<recordID>`.  We need to do some work to make that happen.
   Stop your tomcat<br/>
   mv `<tomcat>`/webapps/SRW `<tomcat>`/webapps/lcnaf<br/>
+This sets the base context of the URI to lcnaf.  This can be slightly confusing as we now have a context named "lcnaf" and a database named "lcnaf", but this typically isn't a problem.  You can choose different names for the context and database.<br/>
 We now have a framework where the SRW server will respond to URLs that begin with "lcnaf".  But, the tomcat framework needs a URL pattern after the "lcnaf" context to invoke the SRW server and even then the SRW server is expecting to see an CQL query, not a bare recordID.  How do we bridge that gap?  How do we turn /lcnaf/no12345 into /lcnaf/search/lcnaf?query=identifier=no12345?  With a URL rewrite filter.  I use the OpenSource urlrewritefilter.
-  Edit `<tomcat>`/webapps/lcnaf/WEB-INF/urlrewrite.xml.  The file came preconfigured to turn URIs of the form /([a-z0-9]+)/ into /search/lcnaf?query=identifier=%22$1%22.  If you've chosen a different URI pattern, then adjust the configuration file appropriately. If you've named your database something other than lcnaf, then you'll need to change that part of the rule also.<br/>
+  Edit `<tomcat>`/webapps/lcnaf/WEB-INF/urlrewrite.xml<br/>
+The file came preconfigured to turn URIs of the form /([a-z0-9]+)/ into /search/lcnaf?query=identifier=%22$1%22.  If you've chosen a different URI pattern, then adjust the configuration file appropriately. If you've named your database something other than lcnaf, then you'll need to change that part of the rule also.<br/>
 
 == SeeOther Redirect ==
 The 303 (SeeOther) redirect from a URI is the mechanism that tells Linked Data aware applications that they have a RealWorldObject in their hands and that the object of the redirect should support content negotiation for RDF.<br/>
