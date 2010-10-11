@@ -71,6 +71,13 @@ Subversion client
   When a server does Content Negotiation, it is supposed to give the client a URL that it can use to find the content directly (without Content Negotiation).  That URL is supposed to be returned in the Content-Location header of the server response.  We can do that too.<br/>
 
   Edit the SRWDatabase.props file for your database.<br/>  Uncomment the `ContentLocation` lines.<br/>
+
+  That change tells the SRW server what value to put in the Content-Location header.  It doesn't tell the server how to handle a request for /lcnaf/no12345/lcnaf.xml.  For that, we'll need to go back to the rewrite rules.<br/>
+
+  Edit `<tomcat>`/webapps/lcnaf/WEB-INF/urlrewrite.xml.  At the very bottom, you'll see a rule that converts a request for a URI into a query and adds an explicit request for the media type application/rdf+xml.  Copy that rule and add support for lcnaf.xml and lcnaf.html<br/>
+
   Bounce your tomcat server.
+    http://localhost:8080/lcnaf/no201063790/lcnaf.xml<br/>
+    http://localhost:8080/lcnaf/no201063790/lcnaf.html<br/>
     http://localhost:8080/lcnaf/no201063790/rdf.xml<br/>
   
