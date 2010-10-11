@@ -1,0 +1,23 @@
+#Notes from the Access 2010 talk on Linked Data
+
+= Introduction =
+
+Instructions on how to build a simple Linked Data system for records in a directory.
+
+
+= Prerequisites =
+
+JDK 1.6 or higher (_might_ work with 1.5)
+Tomcat 5 or 6 (I've not tried 7 yet)
+Ant 1.7 or higher
+Subversion client
+
+= Instructions =
+==Download oclcsrw, build and deploy==
+  svn checkout http://oclcsrw.googlecode.com/svn/trunk/ oclcsrw<br/>
+  cd oclcsrw<br/>
+  ant<br/>
+  cp dist/SRW.war `<tomcat>`/webapps<br/>
+<br/>
+Bounce your tomcat.  If everything has worked right, then this URL should get you our trivial SRU interface to date faux database that returns the same record no matter what search you do. http://localhost:8080/SRW/search/test (Adjust the port number as necessary if you did not accept the default tomcat port of 8080.)
+<br/>
