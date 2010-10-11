@@ -69,4 +69,8 @@ Subversion client
 
 == Bypass Content Negotiation ==
   When a server does Content Negotiation, it is supposed to give the client a URL that it can use to find the content directly (without Content Negotiation).  That URL is supposed to be returned in the Content-Location header of the server response.  We can do that too.<br/>
-  Edit the SRWDatabase.props file for your database.<br/>
+
+  Edit the SRWDatabase.props file for your database.<br/>  Uncomment the `ContentLocation` lines.<br/>
+  Bounce your tomcat server.
+    http://localhost:8080/lcnaf/no201063790/rdf.xml<br/>
+  
