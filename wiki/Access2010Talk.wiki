@@ -44,4 +44,13 @@ Subversion client
   The 303 (SeeOther) redirect from a URI is the mechanism that tells Linked Data aware applications that they have a RealWorldObject in their hands and that the object of the redirect should support content negotiation for RDF.<br/>
 The redirect is handled by the urlrewrite filter and came preconfigured in the urlrewrite.xml file.  If you chose a different URI pattern, then you may need to change the regex pattern in the configuration file.  As distributed, it will send URIs of the form /([a-z0-9]+) to /$1/.  (e.g. /no12345 to /no12345/)
 == Content Negotiation ==
+  Content Negotiation is handled by the SRW server and configured separately for each database in its SRWDatabase.props file.<br/>
+
+  Edit the SRWDatabase.props file for your database.<br/>
+
+  Below the basic configuration stuff, you should see references to XML and HTML.  Turning them on will enable content negotiation for those media types and enable server side rendering of the XML to HTML.<br/>
+
+  The server-side rendering requires a trick.  The server is going to render the XML just like the browser would.  But the browser gets URLs that point it to the stylesheets it needs.  The server is going to have to use the same mechanism to fetch those stylesheets.  The browser knows what port the server is listening on, but I've found no way for a servlet to find out what port its tomcat is listening on.  So, I've added a parm in the web.xml that tells the SRW servlet what port number to use to fetch stylesheets.<br/>
+  Edit `<tomcat>`/webapps/lcnaf/WEB-INF/web.xml.  Uncomment the portNumber parameter.  Change the value of 8080 to whatever port your tomcat is listening on.<br/>
+
 == Bypass Content Negotiation ==
