@@ -83,5 +83,6 @@ Subversion client
 
 == Teaser ==
   The observant reader will have noticed references to a URL parameter named "service" with a value of "APP".  You will also have noticed tests in the rewrite rules that are conditional on the HTTP method being "GET".  What's with that?<br/>
+
   Our SRW server support the AtomPub protocol.  Databases need to implement a few new methods to support adding, replacing and deleting records and you can do AtomPub record management to your Linked Data collection.  (So far, I've only done that for my internal database system, Pears, but adding it to others, like SRWFileSystemDatabase, would be simple.)
   
