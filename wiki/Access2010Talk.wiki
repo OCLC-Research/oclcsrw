@@ -7,10 +7,10 @@ Instructions on how to build a simple Linked Data system for records in a direct
 
 = Prerequisites =
 
-  JDK 1.6 or higher (_might_ work with 1.5)
-  Tomcat 5 or 6 (I've not tried 7 yet)
-  Ant 1.7 or higher
-  Subversion client
+  JDK 1.6 or higher (_might_ work with 1.5)<br/>
+  Tomcat 5 or 6 (I've not tried 7 yet)<br/>
+  Ant 1.7 or higher<br/>
+  Subversion client<br/>
 
 = Instructions =
 == Download oclcsrw, build and deploy ==
