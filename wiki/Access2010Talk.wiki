@@ -11,6 +11,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
   Tomcat 5 or 6 (I've not tried 7 yet)<br/>
   Ant 1.7 or higher<br/>
   Subversion client<br/>
+<br/>
 
 = Instructions =
 == Download oclcsrw, build and deploy ==
@@ -20,6 +21,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
   cp dist/SRW.war `<tomcat>`/webapps<br/>
 
   Bounce your tomcat.  If everything has worked right, then this URL should get you our trivial SRU interface to date faux database that returns the same record no matter what search you do. http://localhost:8080/SRW/search/test (Adjust the port number as necessary if you did not accept the default tomcat port of 8080.)
+<br/>
 
 == Bring up database ==
   Put some MarcXML records in a directory.  (The service will work with any XML, but I'm using MarcXML for this demonstration.)  I got some LCNAF records from this SRW server: http://alcme.oclc.org/srw/search/lcnaf.  Search for something amusing (I used my last name).  If you do a "view source" on the response, you'll see MarcXML records in the response.  Cut out individual records from that response and store them as separate files in the directory you picked.  Choose some content in the record to be used as the filename.  That filename (with suitable filtering) will become the URI for the record, so choose wisely.  I chose the LCCN in the 010$a field. (You can just download the two records I stored on `GoogleCode` if the above seems too complicated right now.)<br/>
@@ -28,6 +30,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
   Edit `<tomcat>`/webapps/SRW/WEB-INF/classes/SRWServer.props.  Uncomment the three lines for the SRWFileSystemDatabase.  To change the database name, change the second part of the property name (e.g. change 'lcnaf' to '`MyTest`').  Change the location of the database home to point at the directory with your records and SRWDatabase.props.<br/>
 
   Bounce your tomcat and try http://localhost:8080/SRW/search/lcnaf (adjusted appropriately for your environment.)  If you select "identifier" from the pulldown list under "Browse" and then click the "Browse" button, you should see a list of your XML file names.  Click on one and you should see the file's contents.<br/>
+<br/>
 
 == Decide on your URI pattern ==
   I decided to expose the records as `http://localhost:8080/lcnaf/<recordID>`.  We need to do some work to make that happen.<br/>
@@ -41,11 +44,13 @@ Instructions on how to build a simple Linked Data system for records in a direct
   The file came preconfigured to turn URIs of the form /(`[a-z0-9]`+)/ into /search/lcnaf?query=identifier=%22$1%22.  If you've chosen a different URI pattern, then adjust the configuration file appropriately. If you've named your database something other than lcnaf, then you'll need to change that part of the rule also.<br/>
   Bounce your tomcat server<br/>
   http://localhost:8080/lcnaf/no201063790<br/>
+<br/>
 
 == `SeeOther` Redirect ==
   The 303 (`SeeOther`) redirect from a URI is the mechanism that tells Linked Data aware applications that they have a `RealWorldObject` in their hands and that the object of the redirect should support content negotiation for RDF.<br/>
 
   The redirect is handled by the urlrewrite filter and came preconfigured in the urlrewrite.xml file.  If you chose a different URI pattern, then you may need to change the regex pattern in the configuration file.  As distributed, it will send URIs of the form /(`[a-z0-9]`+) to /$1/.  (e.g. /no12345 to /no12345/)<br/>
+<br/>
 
 == Content Negotiation ==
   Content Negotiation is handled by the SRW server and configured separately for each database in its SRWDatabase.props file.<br/>
@@ -59,6 +64,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
   Bounce your tomcat server<br/>
 
   If you ask for one of those records again and view the source, you'll see HTML now.
+<br/>
 
 == Support application/rdf+xml as a media type ==
   To support media types beyond HTML and the native XML, all we need is a stylesheet to generate the new content.  If we want to support RDF, then we need a stylesheet that converts our native XML to RDF.  In the case of our MarcXML, the Library of Congress has already written a stylesheet to produce RDF.<br/>
@@ -66,6 +72,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
   Download http://www.loc.gov/standards/marcxml/xslt/MARC21slim2RDFDC.xsl and put it in your database directory.<br/>
   Edit the SRWDatabase.props file for your database. Find the lines that define the RDF media type and uncomment them.<br/>
   Bounce your tomcat server.
+<br/>
 
 == Bypass Content Negotiation ==
   When a server does Content Negotiation, it is supposed to give the client a URL that it can use to find the content directly (without Content Negotiation).  That URL is supposed to be returned in the Content-Location header of the server response.  We can do that too.<br/>
@@ -80,6 +87,7 @@ Instructions on how to build a simple Linked Data system for records in a direct
     http://localhost:8080/lcnaf/no201063790/lcnaf.xml<br/>
     http://localhost:8080/lcnaf/no201063790/lcnaf.html<br/>
     http://localhost:8080/lcnaf/no201063790/rdf.xml<br/>
+<br/>
 
 == Teaser ==
   The observant reader will have noticed references to a URL parameter named "service" with a value of "APP".  You will also have noticed tests in the rewrite rules that are conditional on the HTTP method being "GET".  What's with that?<br/>
