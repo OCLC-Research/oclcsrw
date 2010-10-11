@@ -12,6 +12,10 @@
         ORG.oclc.os.SRW.SRWServlet
     </servlet-class>
     <!--init-param>
+      <param-name>portNumber</param-name>
+      <param-value>8080</param-value>
+      </init-param-->
+    <!--init-param>
       <param-name>PropertiesFile</param-name>
       <param-value>webapps/SRW/SRWServer.propss</param-value>
     </init-param-->
