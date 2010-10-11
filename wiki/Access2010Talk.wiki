@@ -39,6 +39,8 @@ Subversion client
   We now have a framework where the SRW server will respond to URLs that begin with "lcnaf".  But, the tomcat framework needs a URL pattern after the "lcnaf" context to invoke the SRW server and even then the SRW server is expecting to see an CQL query, not a bare recordID.  How do we bridge that gap?  How do we turn /lcnaf/no12345 into /lcnaf/search/lcnaf?query=identifier=no12345?  With a URL rewrite filter.  I use the OpenSource urlrewritefilter.
   Edit `<tomcat>`/webapps/lcnaf/WEB-INF/urlrewrite.xml<br/>
   The file came preconfigured to turn URIs of the form /([a-z0-9]+)/ into /search/lcnaf?query=identifier=%22$1%22.  If you've chosen a different URI pattern, then adjust the configuration file appropriately. If you've named your database something other than lcnaf, then you'll need to change that part of the rule also.<br/>
+  Bounce your tomcat server<br/>
+  http://localhost:8080/lcnaf/no201063790<br/>
 
 == `SeeOther` Redirect ==
   The 303 (`SeeOther`) redirect from a URI is the mechanism that tells Linked Data aware applications that they have a `RealWorldObject` in their hands and that the object of the redirect should support content negotiation for RDF.<br/>
@@ -54,6 +56,7 @@ Subversion client
 
   The server-side rendering requires a trick.  The server is going to render the XML just like the browser would.  But the browser gets URLs that point it to the stylesheets it needs.  The server is going to have to use the same mechanism to fetch those stylesheets.  The browser knows what port the server is listening on, but I've found no way for a servlet to find out what port its tomcat is listening on.  So, I've added a parm in the web.xml that tells the SRW servlet what port number to use to fetch stylesheets.<br/>
   Edit `<tomcat>`/webapps/lcnaf/WEB-INF/web.xml.  Uncomment the portNumber parameter.  Change the value of 8080 to whatever port your tomcat is listening on.<br/>
+  Bounce your tomcat server<br/>
 
   If you ask for one of those records again and view the source, you'll see HTML now.
 
@@ -62,6 +65,7 @@ Subversion client
 
   Download http://www.loc.gov/standards/marcxml/xslt/MARC21slim2RDFDC.xsl and put it in your database directory.<br/>
   Edit the SRWDatabase.props file for your database. Find the lines that define the RDF media type and uncomment them.<br/>
+  Bounce your tomcat server.
 
 == Bypass Content Negotiation ==
   When a server does Content Negotiation, it is supposed to give the client a URL that it can use to find the content directly (without Content Negotiation).  That URL is supposed to be returned in the Content-Location header of the server response.  We can do that too.<br/>
