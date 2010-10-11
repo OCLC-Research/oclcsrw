@@ -42,7 +42,9 @@ Subversion client
 
 == SeeOther Redirect ==
   The 303 (SeeOther) redirect from a URI is the mechanism that tells Linked Data aware applications that they have a RealWorldObject in their hands and that the object of the redirect should support content negotiation for RDF.<br/>
-The redirect is handled by the urlrewrite filter and came preconfigured in the urlrewrite.xml file.  If you chose a different URI pattern, then you may need to change the regex pattern in the configuration file.  As distributed, it will send URIs of the form /([a-z0-9]+) to /$1/.  (e.g. /no12345 to /no12345/)
+
+  The redirect is handled by the urlrewrite filter and came preconfigured in the urlrewrite.xml file.  If you chose a different URI pattern, then you may need to change the regex pattern in the configuration file.  As distributed, it will send URIs of the form /([a-z0-9]+) to /$1/.  (e.g. /no12345 to /no12345/)<br/>
+
 == Content Negotiation ==
   Content Negotiation is handled by the SRW server and configured separately for each database in its SRWDatabase.props file.<br/>
 
