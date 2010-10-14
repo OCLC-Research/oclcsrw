@@ -5,6 +5,9 @@
 Instructions on how to build a simple Linked Data system for records in a directory.
 
 
+= Links =
+  [http://www.oclc.org/research/events/taichi.htm#ld Linked Data Webinar]
+
 = Prerequisites =
 
   JDK 1.6 or higher (_might_ work with 1.5)<br/>
