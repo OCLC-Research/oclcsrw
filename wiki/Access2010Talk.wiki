@@ -89,10 +89,14 @@ Instructions on how to build a simple Linked Data system for records in a direct
     http://localhost:8080/lcnaf/no201063790/rdf.xml<br/>
 <br/>
 
-== Teaser ==
+== Teasers ==
   The observant reader will have noticed references to a URL parameter named "service" with a value of "APP".  You will also have noticed tests in the rewrite rules that are conditional on the HTTP method being "GET".  What's with that?<br/>
 
   Our SRW server support the AtomPub protocol.  Databases need to implement a few new methods to support adding, replacing and deleting records and you can do AtomPub record management to your Linked Data collection.  (So far, I've only done that for my internal database system, Pears, but adding it to others, like SRWFileSystemDatabase, would be simple.)<br/>
+
+  I'm working on an Atom/RSS Feed mechanism for downloading content.  It will require a date index accessible by SRU.<br/>
+
+  I've got support for content-based URIs.  Typical URIs are control numbers.  But, most content is not control numbers.  If we are to encourage content providers to provide links from their content to our content, how can they do that without control numbers.  We'll support URIs built from content: e.g. http://test.viaf.org/viaf/name/shakespeare.  Essentially, we expose an index as a URI and return either a 301 (Moved) redirect, a 404 (Not Found) or a 300 (Multiple Choices) response.  (Truth in Lending: the example above should return a 300, but the current implementation returns the most popular matching record.)<br/>
 
 = Links =
   [http://www.oclc.org/research/events/taichi.htm#ld Linked Data Webinar]
