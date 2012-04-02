@@ -7,11 +7,9 @@
 
 package ORG.oclc.os.SRW;
 
-import junit.framework.*;
-import java.util.Enumeration;
-import java.util.NoSuchElementException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
 
 /**
  *
@@ -23,9 +21,11 @@ public class ElementParserTest extends TestCase {
         super(testName);
     }
 
+    @Override
     protected void setUp() throws Exception {
     }
 
+    @Override
     protected void tearDown() throws Exception {
     }
 
