@@ -40,9 +40,12 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.net.*;
-import java.util.Hashtable;
+import java.rmi.RemoteException;
+import java.util.Arrays;
+import java.util.HashMap;
 import javax.swing.*;
 import javax.swing.event.*;
+import javax.xml.rpc.ServiceException;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.Transformer;
@@ -59,6 +62,7 @@ import org.apache.axis.types.PositiveInteger;
  */
 public class SRWGuiClient extends JFrame implements HyperlinkListener, 
                                                ActionListener {
+    private static final long serialVersionUID = 1L;
 
     public static void main(String[] args) {
         try {
@@ -94,8 +98,9 @@ public class SRWGuiClient extends JFrame implements HyperlinkListener,
                 if(terms!=null) {
                     TermType[] term=terms.getTerm();
                     System.out.println(term.length+" terms returned");
-                    for(int i=0; i<term.length; i++)
-                        System.out.println(term[i].getValue()+"("+term[i].getNumberOfRecords().intValue()+")");
+                    for (TermType term1 : term) {
+                        System.out.println(term1.getValue() + "(" + term1.getNumberOfRecords().intValue() + ")");
+                    }
                 }
                 else
                     System.out.println("0 terms returned");
@@ -120,26 +125,30 @@ public class SRWGuiClient extends JFrame implements HyperlinkListener,
                 System.out.println("0 records returned");
             else {
                 System.out.println(record.length+" records returned");
-                System.out.println("record="+record);
+                System.out.println("record="+Arrays.toString(record));
                 System.out.println("record[0] has record number "+
                 record[0].getRecordPosition());
                 StringOrXmlFragment frag=record[0].getRecordData();
                 System.out.println("frag="+frag);
                 MessageElement[] elems=frag.get_any();
-                System.out.println("elems="+elems);
+                System.out.println("elems="+Arrays.toString(elems));
                 System.out.println("value="+elems[0].getValue());
             }
             System.out.println("nextRecordPosition="+response.getNextRecordPosition());
         }
-        catch(Exception e) {
-            e.printStackTrace();
+        catch(MalformedURLException e) {
+            e.printStackTrace(System.out);
+        } catch (RemoteException e) {
+            e.printStackTrace(System.out);
+        } catch (ServiceException e) {
+            e.printStackTrace(System.out);
         }
     }
-  private JIconButton homeButton;
-  private JTextField urlField;
+  private final JIconButton homeButton;
+  private final JTextField urlField;
   private JEditorPane htmlPane;
-  private String initialURL;
-  private Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
+  private final String initialURL;
+  private HashMap<String, Transformer> transformers=new HashMap<String, Transformer>();
 
   public SRWGuiClient(String initialURL) {
     super("Simple Swing Browser");
@@ -217,6 +226,7 @@ public class SRWGuiClient extends JFrame implements HyperlinkListener,
             StreamSource streamXMLRecord=new StreamSource(stringRecordReader);
             transformer.transform(streamXMLRecord,
                 new StreamResult(xmlRecordWriter));
+            transformer.reset();
             String html=xmlRecordWriter.toString();
             int i=html.indexOf('>');
             html="<html>"+html.substring(html.indexOf('>')+1);

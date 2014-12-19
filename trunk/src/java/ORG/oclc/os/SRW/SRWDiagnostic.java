@@ -23,7 +23,6 @@ package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.DiagnosticsType;
 import gov.loc.www.zing.srw.diagnostic.DiagnosticType;
-import java.net.URI;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -196,6 +195,7 @@ public class SRWDiagnostic extends Exception {
     public static final int StylesheetsNotSupported=110;
     public static final int ResponsePositionOutOfRange=120;
     public static final int TooManyTermsMatchedByMaskedQueryTerm=130;
+    private static final long serialVersionUID = 1L;
 
     int code;
     String addInfo;
@@ -237,8 +237,7 @@ public class SRWDiagnostic extends Exception {
             newDiagnostics=new DiagnosticType[diagnostics.length+newDiags.length];
             System.arraycopy(diagnostics, 0, newDiagnostics, 0, diagnostics.length);
         }
-        for(int i=0; i<newDiags.length; i++)
-            newDiagnostics[newDiagnostics.length-newDiags.length+i]=newDiags[i];
+        System.arraycopy(newDiags, 0, newDiagnostics, newDiagnostics.length-newDiags.length, newDiags.length);
         return newDiagnostics;
     }
 
@@ -293,7 +292,7 @@ public class SRWDiagnostic extends Exception {
     }
 
     public static String newSurrogateDiagnostic(String baseURI, int code, String details) {
-        StringBuffer sb=new StringBuffer("<diagnostic xmlns=\"http://www.loc.gov/zing/srw/diagnostic/\">\n");
+        StringBuilder sb=new StringBuilder("<diagnostic xmlns=\"http://www.loc.gov/zing/srw/diagnostic/\">\n");
         sb.append("  <uri>").append(baseURI).append(code).append("</uri>\n");
         if(details!=null)
             sb.append("  <details>").append(details).append("</details>\n");
@@ -307,5 +306,13 @@ public class SRWDiagnostic extends Exception {
 
     public String getAddInfo() {
         return addInfo;
+    }
+    
+    public static String toString(DiagnosticType diagnostic) {
+        StringBuilder sb=new StringBuilder();
+        sb.append(diagnostic.getUri());
+        if(diagnostic.getDetails()!=null)
+            sb.append(": ").append(diagnostic.getDetails());
+        return sb.toString();
     }
 }

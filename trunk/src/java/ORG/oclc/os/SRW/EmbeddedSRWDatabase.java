@@ -278,7 +278,7 @@ public class EmbeddedSRWDatabase {
 //                        rh.loadTags(new StringReader(tags.toString()));
 //                        rh.setByteToCharConverter("utf8");
 //                        MessageElement elems[]=edt.get_any();
-//                        rh.Input(new ByteArrayInputStream(elems[0].toString().getBytes("UTF-8")));
+//                        rh.Input(new ByteArrayInputStream(elems[0].toString().getBytes(Charset.forName("UTF-8"))));
 //                        DataDir summary=rh.getNextRecord();
 //                        DataDir restrictors[]=new DataDir[summary.count()-1];
 //                        restrictors[0]=summary.child().next();
@@ -332,11 +332,13 @@ public class EmbeddedSRWDatabase {
                                     System.out.print(sw.toString());
                                 }
                                 catch(Exception e) {
+                                    transformer.reset();
                                     e.printStackTrace();
                                 }
                             }
                             else
                                 System.out.println(recordStr);
+                            transformer.reset();
                         }
                     }
                     System.out.println("nextRecordPosition=" + searchResponse.getNextRecordPosition());

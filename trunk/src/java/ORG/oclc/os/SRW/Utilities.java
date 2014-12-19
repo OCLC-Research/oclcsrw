@@ -35,12 +35,21 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.ParseException;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.Properties;
+import java.util.Scanner;
+import java.util.StringTokenizer;
 import javax.xml.namespace.QName;
+import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 import org.apache.axis.MessageContext;
@@ -67,6 +76,67 @@ public class Utilities {
     static final Log log=LogFactory.getLog(Utilities.class);
     static final String newLine = System.getProperty("line.separator");
 
+    public static Transformer addTransformer(String schemaName,
+      String transformerFileName, String homeDirectoryName,
+      ArrayList<String> parameterNames, ArrayList<String> parameterValues,
+      Properties properties, String propertiesFileName)
+      throws FileNotFoundException, TransformerConfigurationException, UnsupportedEncodingException {
+        if(transformerFileName==null) {
+            log.info(schemaName+" transformer not specified");
+            log.info(".props filename is " + propertiesFileName);
+            return null;
+        }
+        if(transformerFileName.startsWith("Renderer=")) // old notation, ignore
+            return null;
+        if(transformerFileName.startsWith("class=")) {
+            StringTokenizer st=new StringTokenizer(transformerFileName, " \t=");
+            st.nextToken(); // skip the class= part
+            String transformerName=st.nextToken();
+            log.debug("creating instance of class "+transformerName);
+            Class<? extends DatabaseRecordTransformer>  transformerClass;
+            try {
+                transformerClass = Class.forName(transformerName).asSubclass(DatabaseRecordTransformer.class);
+                DatabaseRecordTransformer t=transformerClass.newInstance();
+                t.init(properties);
+                return t;
+            } catch (ClassNotFoundException ex) {
+                throw new FileNotFoundException(ex.getMessage());
+            } catch (InstantiationException ex) {
+                throw new TransformerConfigurationException(ex);
+            } catch (IllegalAccessException ex) {
+                throw new TransformerConfigurationException(ex);
+            }
+        }
+        Source             xslSource;
+        TransformerFactory tFactory=
+            TransformerFactory.newInstance();
+        File f=Utilities.findFile(transformerFileName, homeDirectoryName, null);
+        String stylesheet = new Scanner(f, "UTF-8").useDelimiter("\\A").next();
+        if(stylesheet.contains("%HOSTANDPORT%")) {
+            log.info("stylesheet "+transformerFileName+" contains %HOSTANDPORT%");
+            if(properties.getProperty("hostAndPort")!=null) {
+                log.info("hostAndPort="+properties.getProperty("hostAndPort"));
+                stylesheet=stylesheet.replace("%HOSTANDPORT%", properties.getProperty("hostAndPort"));
+            }
+        }
+        xslSource=new StreamSource(new StringReader(stylesheet));
+        try {
+            xslSource.setSystemId(f.toURI().toURL().toString());
+        }
+        catch(MalformedURLException e) {
+            log.error("trying to set the xslSource SystemID", e);
+        }
+
+        Transformer t=tFactory.newTransformer(xslSource);
+        // set any parameters to be passed to the transformer
+        if(parameterNames!=null)
+            for(int i=0; i<parameterNames.size(); i++)
+                t.setParameter(parameterNames.get(i), parameterValues.get(i));
+
+        log.debug("created transformer for schemaName "+schemaName);
+        return t;
+    }
+
     public static String byteArrayToString(byte array[]) {
         return byteArrayToString(array, 0, array.length);
     }
@@ -76,7 +146,7 @@ public class Utilities {
         StringBuilder alpha = new StringBuilder();
         int stopat = length + offset;
         char c;
-        int i, type;
+        int i;
 
         for (i=1; offset < stopat; offset++,i++) {
             if ((array[offset]&0xff)<16)
@@ -86,7 +156,6 @@ public class Utilities {
             str.append(Integer.toString(array[offset]&0xff,16));
 
             c = (char)array[offset];
-            type = Character.getType(c);
 
             //      if (Character.isLetterOrDigit(c) || (c > )
             if (c<' ' || c>=0x7f)
@@ -102,7 +171,6 @@ public class Utilities {
         }
         while(i++%16!=1)
             str.append("   ");
-        offset = 0;
 
         str.append("  ").append(alpha).append(newLine);
         str.append(newLine);
@@ -114,7 +182,7 @@ public class Utilities {
     public static String escapeBackslash(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='\\') {
@@ -143,6 +211,7 @@ public class Utilities {
         File f=new File(fileName);
         if(f.exists())
             return f;
+//        System.out.println("in findFile: didn't find in CWD: "+fileName);
 
         if(directory1!=null) {
             if(directory1.endsWith("/"))
@@ -151,6 +220,7 @@ public class Utilities {
                 f=new File(directory1+"/"+fileName);
             if(f.exists())
                 return f;
+//            System.out.println("in findFile: didn't find in directory1: "+f.getPath());
         }
 
         if(directory2!=null) {
@@ -160,6 +230,7 @@ public class Utilities {
                 f=new File(directory2+"/"+fileName);
             if(f.exists())
                 return f;
+//            System.out.println("in findFile: didn't find in directory2: "+f.getPath());
         }
 
         // finally, let's see if we can find it on the classpath
@@ -191,7 +262,7 @@ public class Utilities {
     public static String hex07Encode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c<0xa) {
@@ -213,50 +284,63 @@ public class Utilities {
         return sb.toString();
     }
 
-    public static String objToSru(Object obj) {
+    public static String toSRU(ScanRequestType request) {
         StringBuilder sru=new StringBuilder();
-        if(obj instanceof SearchRetrieveRequestType) {
-            SearchRetrieveRequestType request=(SearchRetrieveRequestType)obj;
-            sru.append("operation=searchRetrieve");
-            if(request.getMaximumRecords()!=null)
-                sru.append('&').append("maximumRecords=").append(request.getMaximumRecords().toString());
-            if(request.getQuery()!=null) {
-                String query=request.getQuery();
-                if(query.startsWith("\""))
-                    sru.append('&').append("query=").append(urlEncode(request.getQuery()));
-                else
-                    sru.append('&').append("query=").append('"').append(urlEncode(request.getQuery())).append('"');
-            }
-            if(request.getRecordPacking()!=null)
-                sru.append('&').append("recordPacking=").append(request.getRecordPacking());
-            if(request.getRecordSchema()!=null)
-                sru.append('&').append("recordSchema=").append(request.getRecordSchema());
-            if(request.getRecordXPath()!=null)
-                sru.append('&').append("recordXPath=").append(request.getRecordXPath());
-            if(request.getResultSetTTL()!=null)
-                sru.append('&').append("resultSetTTL=").append(request.getResultSetTTL());
-            if(request.getSortKeys()!=null)
-                sru.append('&').append("sortKeys=").append(request.getSortKeys());
-            if(request.getStartRecord()!=null)
-                sru.append('&').append("startRecord=").append(request.getStartRecord().toString());
-            if(request.getVersion()!=null)
-                sru.append('&').append("version=").append(request.getVersion());
-        }
-        else if(obj instanceof ScanRequestType) {
-            ScanRequestType request=(ScanRequestType)obj;
-            sru.append("operation=scan");
-            if(request.getMaximumTerms()!=null)
-                sru.append('&').append("maximumTerms=").append(request.getMaximumTerms().toString());
-            if(request.getResponsePosition()!=null)
-                sru.append('&').append("responsePosition=").append(request.getResponsePosition().toString());
-            if(request.getScanClause()!=null)
-                sru.append('&').append("scanClause=\"").append(urlEncode(request.getScanClause())).append('"');
-            if(request.getVersion()!=null)
-                sru.append('&').append("version=").append(request.getVersion());
-        }
-        else throw new IllegalArgumentException(
-            "Unrecognized object: "+obj.getClass().getName());
+        sru.append("operation=scan");
+        if(request.getMaximumTerms()!=null)
+            sru.append('&').append("maximumTerms=").append(request.getMaximumTerms().toString());
+        if(request.getResponsePosition()!=null)
+            sru.append('&').append("responsePosition=").append(request.getResponsePosition().toString());
+        if(request.getScanClause()!=null)
+            sru.append('&').append("scanClause=\"").append(urlEncode(request.getScanClause())).append('"');
+        if(request.getVersion()!=null)
+            sru.append('&').append("version=").append(request.getVersion());
         return sru.toString();
+    }
+
+    public static String toSRU(SearchRetrieveRequestType request) {
+        StringBuilder sru=new StringBuilder();
+        sru.append("operation=searchRetrieve");
+        if(request.getMaximumRecords()!=null)
+            sru.append('&').append("maximumRecords=").append(request.getMaximumRecords().toString());
+        if(request.getQuery()!=null) {
+            String query=request.getQuery();
+//            if(query.startsWith("\""))
+                sru.append('&').append("query=").append(urlEncode(request.getQuery()));
+//            else
+//                sru.append('&').append("query=").append('"').append(urlEncode(request.getQuery())).append('"');
+        }
+        if(request.getRecordPacking()!=null)
+            sru.append('&').append("recordPacking=").append(request.getRecordPacking());
+        if(request.getRecordSchema()!=null)
+            sru.append('&').append("recordSchema=").append(request.getRecordSchema());
+        if(request.getRecordXPath()!=null)
+            sru.append('&').append("recordXPath=").append(request.getRecordXPath());
+        if(request.getResultSetTTL()!=null)
+            sru.append('&').append("resultSetTTL=").append(request.getResultSetTTL());
+        if(request.getSortKeys()!=null)
+            sru.append('&').append("sortKeys=").append(request.getSortKeys());
+        if(request.getStartRecord()!=null)
+            sru.append('&').append("startRecord=").append(request.getStartRecord().toString());
+        if(request.getVersion()!=null)
+            sru.append('&').append("version=").append(request.getVersion());
+        return sru.toString();
+    }
+
+    /**
+     * 
+     * @param obj
+     * @return String
+     * @deprecated Use the toSRU() method instead
+     */
+    @Deprecated
+    public static String objToSru(Object obj) {
+        if(obj instanceof SearchRetrieveRequestType)
+            return toSRU((SearchRetrieveRequestType)obj);
+        if(obj instanceof ScanRequestType)
+            return toSRU((ScanRequestType)obj);
+        throw new IllegalArgumentException(
+            "Unrecognized object: "+obj.getClass().getName());
     }
 
     public static String objToXml(Object obj)
@@ -300,19 +384,20 @@ public class Utilities {
         try {
             return new FileInputStream(f);
         }
-        catch(Exception e) {
+        catch(FileNotFoundException e) {
             log.error(e, e);
         }
         throw new FileNotFoundException(fileName);
     }
 
     private static ScanRequestType sruScanToObj(CGIParser parser) {
-        Enumeration enumer=parser.getParameterNames();
+        @SuppressWarnings("unchecked")
+        Enumeration<String> enumer = parser.getParameterNames();
         ScanRequestType request=new ScanRequestType();
-        String name, value;
+        String name;
         StringBuilder extraData=new StringBuilder();
         while(enumer.hasMoreElements()) {
-            name=(String)enumer.nextElement();
+            name=enumer.nextElement();
             if(name.equals("maximumTerms"))
                 request.setMaximumTerms(new PositiveInteger(parser.getParameter(name)));
             else if(name.equals("operation"))
@@ -334,12 +419,13 @@ public class Utilities {
     }
 
     private static SearchRetrieveRequestType sruSearchToObj(CGIParser parser) {
-        Enumeration enumer=parser.getParameterNames();
+        @SuppressWarnings("unchecked")
+        Enumeration<String> enumer=parser.getParameterNames();
         SearchRetrieveRequestType request=new SearchRetrieveRequestType();
-        String name, value;
+        String name;
         StringBuilder extraData=new StringBuilder();
         while(enumer.hasMoreElements()) {
-            name=(String)enumer.nextElement();
+            name=enumer.nextElement();
             if(name.equals("maximumRecords"))
                 request.setMaximumRecords(new NonNegativeInteger(parser.getParameter(name)));
             else if(name.equals("operation"))
@@ -384,35 +470,37 @@ public class Utilities {
     }
 
     public static String readURL(String urlStr) throws IOException {
-        return readURL(urlStr, false);
+        return readURL(urlStr, false, false);
     }
 
-    public static String readURL(String urlStr, boolean debug) throws IOException {
+    public static String readURL(String urlStr, boolean debug, boolean failIfNotXML) throws IOException {
         if(debug)
             System.out.print("    trying: "+urlStr+"\n");
-        URL url=null;
+        URL url;
         url=new URL(urlStr);
-        HttpURLConnection huc=null;
+        HttpURLConnection huc;
         huc=(HttpURLConnection)url.openConnection();
+        huc.addRequestProperty("Accept", "text/xml");
         String contentType=huc.getContentType();
-        if(contentType==null || contentType.indexOf("text/xml")<0) {
+        if(contentType==null || !contentType.contains("text/xml")) {
             System.out.print("*** Warning ***  Content-Type not set to text/xml");System.out.print('\n');
             System.out.print("    Content-type: ");System.out.print(contentType);System.out.print('\n');
+            if(failIfNotXML)
+                throw new IOException("Failed to get back XML for '"+urlStr+"'");
         }
-        InputStream urlStream=null;
+        InputStream urlStream;
         urlStream=huc.getInputStream();
-        BufferedReader in = new BufferedReader(
-                                new InputStreamReader(
-                                urlStream));
+        BufferedReader in = new BufferedReader(new InputStreamReader(urlStream));
         boolean xml=true;
         String href=null, inputLine=null;
-        StringBuilder content=new StringBuilder(), stylesheet=null;
+        StringBuilder content=new StringBuilder();
         Transformer transformer=null;
         try {
             inputLine=in.readLine();
         }
         catch(java.io.IOException e) {
-            throw new IOException("failed: reading first line of response: ", e);
+            throw new IOException("failed: reading first line of response: ");
+//            throw new IOException("failed: reading first line of response: ", e);
         }
         if(inputLine==null) {
             System.out.print("test failed: No input read from URL");System.out.print('\n');
@@ -459,9 +547,11 @@ public class Utilities {
             try {
                 transformer.transform(streamXMLRecord,
                     new StreamResult(xmlRecordWriter));
+                transformer.reset();
                 System.out.print("        successfully applied stylesheet '");System.out.print(href);System.out.print("'");System.out.print('\n');
             }
             catch(javax.xml.transform.TransformerException e) {
+                transformer.reset();
                 System.out.print("unable to apply stylesheet '");System.out.print(href);System.out.print("'to response: ");System.out.print(e.getMessage());System.out.print('\n');
             }
         }
@@ -471,7 +561,7 @@ public class Utilities {
     public static String unUrlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='+') {
@@ -508,7 +598,7 @@ public class Utilities {
     public static String unXmlEncode(String s) {
         boolean      changed=false;
         char         c, c1;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c=='&') {
@@ -633,7 +723,7 @@ public class Utilities {
     public static String urlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c==' ' || c=='+' || c=='<' || c=='&' || c=='>' || c=='"' ||
@@ -665,7 +755,7 @@ public class Utilities {
     public static String urlParameterEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c==' ' || c=='+' || c=='<' || c=='&' || c=='>' || c=='"' ||
@@ -749,7 +839,7 @@ public class Utilities {
     public static String xmlEncode(String s) {
         boolean      changed=false;
         char         c;
-        StringBuilder sb=null;
+        StringBuilder sb=new StringBuilder();
         for(int i=0; i<s.length(); i++) {
             c=s.charAt(i);
             if(c<0xa) {

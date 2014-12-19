@@ -21,37 +21,78 @@
 
 package ORG.oclc.os.SRW;
 
+import java.util.HashMap;
+import java.util.StringTokenizer;
+
 /**
  *
  * @author  levan
  */
 public class NameValuePair {
-    private String name, value;
+    private HashMap<String, String> attributeMap;
+    private String attributes, name, value;
     /** Creates a new instance of DataPair */
     public NameValuePair(String name, String value) {
         this.name=name;
         this.value=value;
+        attributes=null;
     }
 
-    public String getValue() {
-        return value;
+    public NameValuePair(String name, String attributes, String value) {
+        this.name=name;
+        this.value=value;
+        this.attributes=attributes;
+        attributeMap=toHashMap(attributes);
+    }
+
+    public String getAttributes() {
+        return attributes;
+    }
+
+    public HashMap<String, String> getAttributeMap() {
+        return attributeMap;
     }
 
     public String getName() {
         return name;
     }
 
-    public void setValue(String value) {
-        this.value=value;
+    public String getValue() {
+        return value;
     }
 
     public void setName(String name) {
         this.name=name;
     }
     
+    public void setValue(String value) {
+        this.value=value;
+    }
+
+    @Override
     public String toString() {
-        StringBuffer sb=new StringBuffer("NameValuePair: name=");
-        sb.append(name).append(", value=\"").append(value).append('"');
+        StringBuilder sb=new StringBuilder("NameValuePair: name=").append(name);
+        if(attributes!=null)
+            sb.append(", attributes=\"").append(attributes).append('"');
+        sb.append(", value=\"").append(value).append('"');
         return sb.toString();
+    }
+
+    private HashMap<String, String> toHashMap(String attributes) {
+        if(attributes==null)
+            return null;
+        HashMap<String, String> map=new HashMap<String, String>();
+        String attribute;
+        StringTokenizer attrs=new StringTokenizer(attributes), avp;
+        while(attrs.hasMoreTokens()) {
+            attribute=attrs.nextToken();
+            avp=new StringTokenizer(attribute, "=");
+            map.put(avp.nextToken(), trimQuotes(avp.nextToken()));
+        }
+        return map;
+    }
+
+    private String trimQuotes(String str) {
+        return str.substring(1, str.length()-1);
     }
 }

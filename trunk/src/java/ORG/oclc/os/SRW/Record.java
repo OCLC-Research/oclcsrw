@@ -61,8 +61,9 @@ public class Record {
         this.identifier = identifier;
     }
 
+    @Override
     public String toString() {
-        StringBuffer sb=new StringBuffer();
+        StringBuilder sb=new StringBuilder();
         sb.append("Record: schemaID=").append(schemaID);
         if(record.length()<=80) {
             sb.append(", content:\n");

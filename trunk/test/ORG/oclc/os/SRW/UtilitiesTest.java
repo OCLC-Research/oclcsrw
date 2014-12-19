@@ -7,12 +7,12 @@
 
 package ORG.oclc.os.SRW;
 
-import junit.framework.*;
 import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import java.io.File;
+import junit.framework.*;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
 import org.z3950.zing.cql.CQLNode;
@@ -84,39 +84,18 @@ public class UtilitiesTest extends TestCase {
     public void testObjToSru() {
         SearchRetrieveRequestType srreq=new SearchRetrieveRequestType();
         srreq.setQuery("dog or cat and mouse");
-        System.out.println("objToSru: "+Utilities.objToSru(srreq));
-        assertEquals("operation=searchRetrieve&query=\"dog%20or%20cat%20and%20mouse\"", Utilities.objToSru(srreq));
+        System.out.println("toSRU: "+Utilities.toSRU(srreq));
+        assertEquals("operation=searchRetrieve&query=dog%20or%20cat%20and%20mouse", Utilities.toSRU(srreq));
         srreq.setResultSetTTL(new NonNegativeInteger("123"));
-        assertEquals("operation=searchRetrieve&query=\"dog%20or%20cat%20and%20mouse\"&resultSetTTL=123", Utilities.objToSru(srreq));
+        assertEquals("operation=searchRetrieve&query=dog%20or%20cat%20and%20mouse&resultSetTTL=123", Utilities.toSRU(srreq));
         
         ScanRequestType sreq=new ScanRequestType();
         sreq.setScanClause("dog");
-        System.out.println("objToSru: "+Utilities.objToSru(sreq));
-        assertEquals("operation=scan&scanClause=\"dog\"", Utilities.objToSru(sreq));
+        System.out.println("objToSru: "+Utilities.toSRU(sreq));
+        assertEquals("operation=scan&scanClause=\"dog\"", Utilities.toSRU(sreq));
         sreq.setMaximumTerms(new PositiveInteger("20"));
         sreq.setResponsePosition(new NonNegativeInteger("10"));
-        assertEquals("operation=scan&maximumTerms=20&responsePosition=10&scanClause=\"dog\"", Utilities.objToSru(sreq));
-        
-        try {
-            Utilities.objToSru(new SearchRetrieveResponseType());
-            fail("should have thrown an IllegalArgumentException");
-        }
-        catch(IllegalArgumentException e) {
-        }
-
-        try {
-            Utilities.objToSru(new ScanResponseType());
-            fail("should have thrown an IllegalArgumentException");
-        }
-        catch(IllegalArgumentException e) {
-        }
-
-        try {
-            Utilities.objToSru(this);
-            fail("should have thrown an IllegalArgumentException");
-        }
-        catch(IllegalArgumentException e) {
-        }
+        assertEquals("operation=scan&maximumTerms=20&responsePosition=10&scanClause=\"dog\"", Utilities.toSRU(sreq));
     }
 
     /**

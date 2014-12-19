@@ -12,7 +12,7 @@ import javax.servlet.http.HttpServletResponse;
  */
 public interface HttpHeaderSetter {
     public void init(Properties props);
-    public void setGetResponseHeaders(SearchRetrieveRequestType searchRequest,
+    public int setGetResponseHeaders(SearchRetrieveRequestType searchRequest,
             SearchRetrieveResponseType searchResponse, String soapResponse,
             HttpServletRequest httpRequest, HttpServletResponse httpResponse);
     public void setDeleteResponseHeaders(String record,

@@ -21,8 +21,6 @@
 
 package ORG.oclc.os.SRW;
 
-import gov.loc.www.zing.srw.interfaces.ExplainPort;
-import gov.loc.www.zing.srw.interfaces.SRWPort;
 import gov.loc.www.zing.srw.ExplainRequestType;
 import gov.loc.www.zing.srw.ExplainResponseType;
 import gov.loc.www.zing.srw.RecordType;
@@ -31,44 +29,48 @@ import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
-import gov.loc.www.zing.srw.service.SRWSampleServiceLocator;
 import gov.loc.www.zing.srw.StringOrXmlFragment;
 import gov.loc.www.zing.srw.TermType;
 import gov.loc.www.zing.srw.TermsType;
-
+import gov.loc.www.zing.srw.interfaces.ExplainPort;
+import gov.loc.www.zing.srw.interfaces.SRWPort;
+import gov.loc.www.zing.srw.service.SRWSampleServiceLocator;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.Hashtable;
-import java.util.Vector;
-
-import javax.xml.parsers.DocumentBuilder; 
+import java.rmi.RemoteException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;  
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.rpc.ServiceException;
 import javax.xml.transform.Source;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
-
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 import org.apache.axis.message.MessageElement;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.xpath.XPathAPI;
-
-import org.w3c.dom.Document;
+import org.w3c.dom.DOMException;
 import org.w3c.dom.DOMImplementation;
+import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException; 	
 import org.xml.sax.SAXParseException;
@@ -78,17 +80,18 @@ import org.xml.sax.SAXParseException;
  * @author  levan
  */
 public class SRUServerTester {
+    private static final Log log=LogFactory.getLog(SRUServerTester.class);
 
     boolean      good=true, runningAsMain=false, scanSupported=true;
     Document     explainDoc=null;
     Element      ns = null;
-    Hashtable<String, String> stylesheets=new Hashtable<String, String>();
-    Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
+    HashMap<String, String> stylesheets=new HashMap<String, String>();
+    HashMap<String, Transformer> transformers=new HashMap<String, Transformer>();
     int          numFailed=0, numTests=0, numWarns=0;
     String       baseURL=null, originalBaseURL=null;
-    StringBuffer sb=new StringBuffer();
+    StringBuilder sb=new StringBuilder();
     Term         termForTesting=new Term("cql.serverChoice", "=", "dog", "-1");
-    Vector<Term> vTerms=new Vector<Term>();
+    ArrayList<Term> vTerms=new ArrayList<Term>();
 
     public SRUServerTester(String baseURL) {
         if(baseURL.endsWith("?"))
@@ -115,9 +118,10 @@ public class SRUServerTester {
                                 "xmlns:diag",
                                 "http://www.loc.gov/zing/srw/diagnostic/");
         }
-        catch(Exception e) {
-            System.out.println("unable to build namespace record)");
-            e.printStackTrace();
+        catch(ParserConfigurationException e) {
+            log.error("unable to build namespace record)", e);
+        } catch (DOMException e) {
+            log.error("unable to build namespace record)", e);
         }
     }
     
@@ -157,7 +161,7 @@ public class SRUServerTester {
                 out("  It should have been set explicitly to 80.");out('\n');
                 numWarns++;
             }
-            if(port.equals("80") || port.equals("8080") || port.equals("7090"))
+            if("80".equals(port) || "8080".equals(port) || "7090".equals(port))
                 baseURL="http://"+host+":"+port+"/"+database+"?";
             else {
                 out("  ** Warning: your explain record claims that its host is on port "+port);out('\n');
@@ -239,7 +243,7 @@ public class SRUServerTester {
             out("tests of searchRetrieve");out('\n');
             if(vTerms.size()>0) { // yay!  we have a list of good terms from the scan tests!
                 for(i=0; i<vTerms.size(); i++) {
-                    t=vTerms.elementAt(i);
+                    t=vTerms.get(i);
                     if(!search(t))
                         failed();
                     if(!search(new Term(t.index, t.relation, t.term+"xxxx", "0")))
@@ -446,7 +450,7 @@ public class SRUServerTester {
     public boolean isExplainResponse(String explainResponse) {
         if(explainResponse==null)
             return false;
-        int offset=-1;
+        int offset;
         offset=explainResponse.indexOf(":explainResponse ");
         if(offset==-1)
             offset=explainResponse.indexOf("<explainResponse ");
@@ -460,17 +464,17 @@ public class SRUServerTester {
         while(explainResponse.charAt(offset)!='<')
             offset--;
         String rootElement=explainResponse.substring(offset, explainResponse.indexOf('>', offset));
-        if(rootElement.indexOf("=\"http://www.loc.gov/zing/srw/\"")<0 &&
-           rootElement.indexOf("='http://www.loc.gov/zing/srw/'")<0) {
+        if(!rootElement.contains("=\"http://www.loc.gov/zing/srw/\"") &&
+           !rootElement.contains("='http://www.loc.gov/zing/srw/'")) {
             out("</pre><pre class='red'>");
             out("  **** Fatal **** explain record does not reference namespace: \"http://www.loc.gov/zing/srw/\"");out('\n');
             out("</pre><pre>");
             return false;
         }
-        if(explainResponse.indexOf("=\"http://explain.z3950.org/dtd/2.0/\"")<0 &&
-           explainResponse.indexOf("='http://explain.z3950.org/dtd/2.0/'")<0 &&
-           explainResponse.indexOf("=\"http://explain.z3950.org/dtd/2.1/\"")<0 &&
-           explainResponse.indexOf("='http://explain.z3950.org/dtd/2.1/'")<0) {
+        if(!explainResponse.contains("=\"http://explain.z3950.org/dtd/2.0/\"") &&
+           !explainResponse.contains("='http://explain.z3950.org/dtd/2.0/'") &&
+           !explainResponse.contains("=\"http://explain.z3950.org/dtd/2.1/\"") &&
+           !explainResponse.contains("='http://explain.z3950.org/dtd/2.1/'")) {
             out("</pre><pre class='red'>");
             out("  **** Fatal **** explain record does not reference namespace: \"http://explain.z3950.org/dtd/2.0/\" or 2.1");out('\n');
             out("</pre><pre>");
@@ -498,7 +502,7 @@ public class SRUServerTester {
             if(offset==-1)
                 offset=record.indexOf("<scanResponse ");
         }
-        if(offset<0 || offset>50) {
+        if(offset<0 || offset>50 || record==null) {
             out("</pre><pre class='red'>");
             out("test failed: expected a scanResponse, but got:");out('\n');
             out(Utilities.xmlEncode(record));out('\n');
@@ -508,8 +512,8 @@ public class SRUServerTester {
         while(record.charAt(offset)!='<')
             offset--;
         String rootElement=record.substring(offset, record.indexOf('>', offset));
-        if(rootElement.indexOf("=\"http://www.loc.gov/zing/srw/\"")<0 &&
-           rootElement.indexOf("='http://www.loc.gov/zing/srw/'")<0) {
+        if(!rootElement.contains("=\"http://www.loc.gov/zing/srw/\"") &&
+           !rootElement.contains("='http://www.loc.gov/zing/srw/'")) {
             out("  **** Fatal **** scanResponse record does not reference namespace: \"http://www.loc.gov/zing/srw/\"");out('\n');
             return false;
         }
@@ -523,7 +527,7 @@ public class SRUServerTester {
             if(offset==-1)
                 offset=record.indexOf("<searchRetrieveResponse ");
         }
-        if(offset<0 || offset>50) {
+        if(offset<0 || offset>50 || record==null) {
             out("</pre><pre class='red'>");
             out("test failed: expected a searchRetrieveResponse, but got:");out('\n');
             out(Utilities.xmlEncode(record==null?"null":record));out('\n');
@@ -533,8 +537,8 @@ public class SRUServerTester {
         while(record.charAt(offset)!='<')
             offset--;
         String rootElement=record.substring(offset, record.indexOf('>', offset));
-        if(rootElement.indexOf("=\"http://www.loc.gov/zing/srw/\"")<0 &&
-           rootElement.indexOf("='http://www.loc.gov/zing/srw/'")<0) {
+        if(!rootElement.contains("=\"http://www.loc.gov/zing/srw/\"") &&
+           !rootElement.contains("='http://www.loc.gov/zing/srw/'")) {
             out("  **** Fatal **** scanResponse record does not reference namespace: \"http://www.loc.gov/zing/srw/\"");out('\n');
             return false;
         }
@@ -570,11 +574,13 @@ public class SRUServerTester {
         try {
             DocumentBuilder builder = factory.newDocumentBuilder();
             builder.setErrorHandler(new org.xml.sax.ErrorHandler() {	
-                // ignore fatal errors (an exception is guaranteed)	
+                // ignore fatal errors (an exception is guaranteed)
+                @Override
                 public void fatalError(SAXParseException exception)	
                 throws SAXException {	
                 }	
                 // treat validation errors as fatal	
+                @Override
                 public void error(SAXParseException e)	
                 throws SAXParseException	
                 {	
@@ -582,6 +588,7 @@ public class SRUServerTester {
                 }	
 
                 // dump warnings too	
+                @Override
                 public void warning(SAXParseException err)	
                 throws SAXParseException	
                 {	
@@ -690,7 +697,7 @@ public class SRUServerTester {
     public String sruRead(String initialURL) {
         out('\n');out("    trying: ");out(initialURL);out('\n');
         numTests++;
-        URL url=null;
+        URL url;
         try {
             url=new URL(initialURL);
         }
@@ -700,7 +707,7 @@ public class SRUServerTester {
             out("</pre><pre>");
             return null;
         }
-        HttpURLConnection huc=null;
+        HttpURLConnection huc;
         try {
             huc=(HttpURLConnection)url.openConnection();
         }
@@ -711,12 +718,12 @@ public class SRUServerTester {
             return null;
         }
         String contentType=huc.getContentType();
-        if(contentType==null || (contentType.indexOf("text/xml")<0 && contentType.indexOf("application/xml")<0)) {
+        if(contentType==null || (!contentType.contains("text/xml") && !contentType.contains("application/xml"))) {
             out("  ** Warning: Content-Type not set to text/xml or application/xml");out('\n');
             out("    Content-type: ");out(contentType);out('\n');
             numWarns++;
         }
-        InputStream urlStream=null;
+        InputStream urlStream;
         try {
             urlStream=huc.getInputStream();
         }
@@ -730,8 +737,8 @@ public class SRUServerTester {
                                 new InputStreamReader(
                                 urlStream));
         boolean xml=true;
-        String href=null, inputLine=null;
-        StringBuffer content=new StringBuffer(), stylesheet=null;
+        String href=null, inputLine;
+        StringBuilder content=new StringBuilder();
         Transformer transformer=null;
         try {
             inputLine=in.readLine();
@@ -777,7 +784,6 @@ public class SRUServerTester {
             }
 
             if(inputLine.startsWith("<?xml-stylesheet ")) {
-                offset=inputLine.indexOf("href=");
                 href=(inputLine.substring(inputLine.indexOf("href=")+6));
                 href=href.substring(0, href.indexOf('"'));
                 transformer=transformers.get(href);
@@ -791,8 +797,8 @@ public class SRUServerTester {
                     transformer=tFactory.newTransformer(stylesht);
                     transformers.put(href, transformer);
                 }
-                catch(Exception e) {
-                    e.printStackTrace();
+                catch(TransformerConfigurationException e) {
+                    log.error(e, e);
                     out("</pre><pre class='red'>");
                     out("unable to load stylesheet: ");out(e.getMessage());out('\n');
                     out("</pre><pre>");
@@ -834,8 +840,10 @@ public class SRUServerTester {
                 out("</pre><pre class='red'>");
                 out("unable to apply stylesheet '");out(href);out("'to response: ");out(e.getMessage());out('\n');
                 out("</pre><pre>");
-                e.printStackTrace();
+                log.error(e, e);
+                transformer.reset();
             }
+            transformer.reset();
         }
         return contentStr;
     }
@@ -861,8 +869,9 @@ public class SRUServerTester {
                 if(terms!=null) {
                     TermType[] term=terms.getTerm();
                     System.out.println(term.length+" terms returned");
-                    for(int i=0; i<term.length; i++)
-                        System.out.println(term[i].getValue()+"("+term[i].getNumberOfRecords().intValue()+")");
+                    for (TermType term1 : term) {
+                        System.out.println(term1.getValue() + "(" + term1.getNumberOfRecords().intValue() + ")");
+                    }
                 }
                 else
                     System.out.println("0 terms returned");
@@ -887,18 +896,22 @@ public class SRUServerTester {
                 System.out.println("0 records returned");
             else {
                 System.out.println(record.length+" records returned");
-                System.out.println("record="+record);
+                System.out.println("record="+Arrays.toString(record));
                 System.out.println("record[0] has record number "+
                 record[0].getRecordPosition());
                 StringOrXmlFragment frag=record[0].getRecordData();
                 System.out.println("frag="+frag);
                 MessageElement[] elems=frag.get_any();
-                System.out.println("elems="+elems);
+                System.out.println("elems="+Arrays.toString(elems));
                 System.out.println("value="+elems[0].getValue());
             }
             System.out.println("nextRecordPosition="+response.getNextRecordPosition());
         }
-        catch(Exception e) {
+        catch(MalformedURLException e) {
+            return null;
+        } catch (RemoteException e) {
+            return null;
+        } catch (ServiceException e) {
             return null;
         }
         return null;
@@ -916,7 +929,7 @@ public class SRUServerTester {
         String defaultURL="http://217.179.255.1/VSKaleidosSearchWebService/VSKaleidosSearch.asmx";
 
         //String defaultURL="http://foo.indexdata.dk";
-    if(args!=null && args.length==1)
+    if(args.length==1)
             tester=new SRUServerTester(args[0]);
         else
             tester=new SRUServerTester(defaultURL);

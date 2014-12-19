@@ -23,24 +23,24 @@ package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.DiagnosticsType;
 import gov.loc.www.zing.srw.diagnostic.DiagnosticType;
-import java.util.Vector;
+import java.util.ArrayList;
 
 /**
  *
  * @author levan
  */
 public abstract class SRWDiagnosticsHolder {
-    Vector<DiagnosticType> diagnostics=null;
+    ArrayList<DiagnosticType> diagnostics=null;
 
     public boolean addDiagnostic(DiagnosticType diagnostic) {
         if(diagnostics==null)
-            diagnostics=new Vector<DiagnosticType>();
+            diagnostics=new ArrayList<DiagnosticType>();
         return diagnostics.add(diagnostic);
     }
 
     public boolean addDiagnostic(int code, String addInfo) {
         if(diagnostics==null)
-            diagnostics=new Vector<DiagnosticType>();
+            diagnostics=new ArrayList<DiagnosticType>();
         DiagnosticType dt=SRWDiagnostic.newDiagnosticType(code, addInfo);
         return diagnostics.add(dt);
     }
@@ -57,13 +57,13 @@ public abstract class SRWDiagnosticsHolder {
         return true;
     }
 
-    public boolean addDiagnostics(Vector<DiagnosticType> diagnostics) {
+    public boolean addDiagnostics(ArrayList<DiagnosticType> diagnostics) {
         for(int i=0; i<diagnostics.size(); i++)
             addDiagnostic(diagnostics.get(i));
         return true;
     }
 
-    public Vector<DiagnosticType> getDiagnostics() {
+    public ArrayList<DiagnosticType> getDiagnostics() {
         return diagnostics;
     }
 

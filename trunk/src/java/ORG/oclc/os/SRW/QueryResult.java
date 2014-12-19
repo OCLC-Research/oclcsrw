@@ -22,7 +22,7 @@
 package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.ExtraDataType;
-import java.util.Hashtable;
+import java.util.HashMap;
 
 /**
  *
@@ -33,7 +33,7 @@ public abstract class QueryResult extends SRWDiagnosticsHolder {
     public abstract RecordIterator newRecordIterator(long index, int numRecs,
             String schemaId, ExtraDataType edt) throws InstantiationException;
 
-    Hashtable<String, QueryResult> sortedResults=null;
+    HashMap<String, QueryResult> sortedResults=null;
     private int       resultSetIdleTime;
     RecordIterator recordIterator=null;
 
@@ -49,9 +49,9 @@ public abstract class QueryResult extends SRWDiagnosticsHolder {
         return resultSetIdleTime;
     }
 
-    public Hashtable getSortedResults() {
+    public HashMap<String, QueryResult> getSortedResults() {
         if(sortedResults==null)
-            sortedResults=new Hashtable<String, QueryResult>();
+            sortedResults=new HashMap<String, QueryResult>();
         return sortedResults;
     }
 
@@ -63,7 +63,7 @@ public abstract class QueryResult extends SRWDiagnosticsHolder {
 
     public void putSortedResult(String sortKeys, QueryResult sortedResult) {
         if(sortedResults==null)
-            sortedResults=new Hashtable<String, QueryResult>();
+            sortedResults=new HashMap<String, QueryResult>();
         sortedResults.put(sortKeys, sortedResult);
     }
 

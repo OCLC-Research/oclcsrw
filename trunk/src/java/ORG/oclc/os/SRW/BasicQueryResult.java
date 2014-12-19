@@ -30,7 +30,7 @@ public class BasicQueryResult extends QueryResult {
 
     @Override
     public RecordIterator newRecordIterator(long index, int numRecs, String schemaId, ExtraDataType edt) throws InstantiationException {
-        return new BasicRecordIterator(records, schemaId, index);
+        return new BasicRecordIterator(records, "default", index);
     }
 
     public void setNumberOfRecords(long n) {
@@ -51,4 +51,17 @@ public class BasicQueryResult extends QueryResult {
         this.records = records;
     }
 
+    @Override
+    public String toString() {
+        StringBuilder sb=new StringBuilder();
+        sb.append("BasicQueryResult: query=").append(query).append(", numberOfRecords=").append(numberOfRecords).append(", records.length=");
+        if(records==null)
+            sb.append("0");
+        else
+            sb.append(records.length);
+        for(StringBuilder s: records) {
+            sb.append('\n').append(s.toString());
+        }
+        return sb.toString();
+    }
 }
