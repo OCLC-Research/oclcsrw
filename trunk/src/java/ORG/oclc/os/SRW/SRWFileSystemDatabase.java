@@ -41,6 +41,7 @@ import org.apache.axis.types.NonNegativeInteger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.z3950.zing.cql.CQLNode;
+import org.z3950.zing.cql.CQLParseException;
 import org.z3950.zing.cql.CQLParser;
 import org.z3950.zing.cql.CQLTermNode;
 
@@ -155,7 +156,10 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         try {
             query=parser.parse(queryStr);
         }
-        catch(Exception e) {
+        catch(CQLParseException e) {
+            result.addDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
+            return result;
+        } catch (IOException e) {
             result.addDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
             return result;
         }
@@ -229,16 +233,17 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         for(String t:terms) {
             if(tts.isEmpty())
                 tts.add(tt=new TermType(t, new NonNegativeInteger("1"), t, TermTypeWhereInList.first, null));
-            else if(t.equals(tt.getValue())) {
+            else if(tt!=null && t.equals(tt.getValue())) {
                 tt.setNumberOfRecords(new NonNegativeInteger(Integer.toString(tt.getNumberOfRecords().intValue()+1)));
             }
             else
                 tts.add(tt=new TermType(t, new NonNegativeInteger("1"), t, TermTypeWhereInList.inner, null));
         }
-        if(tts.size()==1)
-            tt.setWhereInList(TermTypeWhereInList.only);
-        else
-            tt.setWhereInList(TermTypeWhereInList.last);
+        if(tt!=null)
+            if(tts.size()==1)
+                tt.setWhereInList(TermTypeWhereInList.only);
+            else
+                tt.setWhereInList(TermTypeWhereInList.last);
         termList.setTerms(tts.toArray(new TermType[0]));
         return termList;
     }
@@ -278,7 +283,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
 }
 
 class DirFilter implements FilenameFilter {
-  private Pattern pattern;
+  private final Pattern pattern;
 
   public DirFilter(String regex) {
     pattern = Pattern.compile(regex);
