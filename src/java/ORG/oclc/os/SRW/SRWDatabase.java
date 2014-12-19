@@ -23,55 +23,25 @@ package ORG.oclc.os.SRW;
 
 import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator;
 import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator.VariantSpec;
-import gov.loc.www.zing.srw.RecordType;
-import gov.loc.www.zing.srw.RecordsType;
-import gov.loc.www.zing.srw.StringOrXmlFragment;
-import gov.loc.www.zing.srw.TermsType;
+import gov.loc.www.zing.srw.*;
 import gov.loc.www.zing.srw.diagnostic.DiagnosticType;
-import gov.loc.www.zing.srw.DiagnosticsType;
-import gov.loc.www.zing.srw.ExplainResponseType;
-import gov.loc.www.zing.srw.ExtraDataType;
-import gov.loc.www.zing.srw.ScanRequestType;
-import gov.loc.www.zing.srw.ScanResponseType;
-import gov.loc.www.zing.srw.SearchRetrieveRequestType;
-import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import gov.loc.www.zing.srw.srw_bindings.SRWSoapBindingImpl;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.StringReader;
-import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
-import java.net.MalformedURLException;
+import java.io.*;
+import java.net.URLDecoder;
+import java.nio.charset.Charset;
+import java.text.Normalizer;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.Hashtable;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.NoSuchElementException;
-import java.util.Properties;
-import java.util.Random;
-import java.util.StringTokenizer;
-import java.util.Timer;
-import java.util.Vector;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Source;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
+import javax.xml.transform.*;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerFactory;
 import org.apache.axis.MessageContext;
 import org.apache.axis.message.MessageElement;
 import org.apache.axis.message.Text;
@@ -85,21 +55,18 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
-import org.z3950.zing.cql.CQLBooleanNode;
-import org.z3950.zing.cql.CQLNode;
-import org.z3950.zing.cql.CQLParseException;
-import org.z3950.zing.cql.CQLParser;
-import org.z3950.zing.cql.CQLTermNode;
+import org.z3950.zing.cql.*;
 
 /**
  *
  * @author  levan
  */
 public abstract class SRWDatabase {
-    private static Log log=LogFactory.getLog(SRWDatabase.class);
-    private static SimpleDateFormat ISO8601FORMAT=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+    private static final Log log=LogFactory.getLog(SRWDatabase.class);
 
     public static final String DEFAULT_SCHEMA = "default";
+    public static final int DefaultResultSetTTL=0;
+    // don't create a result set unless the client asks for it
 
     public abstract String      getExtraResponseData(QueryResult result,
                                   SearchRetrieveRequestType request);
@@ -121,39 +88,55 @@ public abstract class SRWDatabase {
     public abstract boolean     supportsSort();
 
 
-    public static Hashtable<String, String> badDbs=new Hashtable<String, String>();
-    public static Hashtable<String, LinkedList<SRWDatabase>> dbs=new Hashtable<String, LinkedList<SRWDatabase>>();
-    public static final Hashtable<String, QueryResult> oldResultSets=new Hashtable<String, QueryResult>();
-    public static final Hashtable<String, Long> timers=new Hashtable<String, Long>();
+    public static ArrayList<SRWDatabase> allDbs=new ArrayList<SRWDatabase>();
+    public static HashSet<String> badDbs=new HashSet<String>();
+    public static HashSet<String> goodDbs=new HashSet<String>();
+    public static HashMap<String, Integer> dbCount=new HashMap<String, Integer>();
+    public static HashMap<String, LinkedList<SRWDatabase>> dbs=new HashMap<String, LinkedList<SRWDatabase>>();
+    public static final HashMap<String, QueryResult> oldResultSets=new HashMap<String, QueryResult>();
+    public static final HashMap<String, Long> timers=new HashMap<String, Long>();
 
     public static Properties srwProperties;
     public static String servletContext, srwHome;
-    private static final Timer timer=new Timer();
+    public static final Timer timer;
 
     static {
+        timer=new Timer();
         timer.schedule(new HouseKeeping(timers, oldResultSets), 60000L, 60000L);
     }
+    private boolean anonymousUpdates=false;
     private boolean returnResultSetId=true;
     private Matcher extractRecordIdFromUriPatternMatcher;
-    private Random rand=new Random();
+    private final Random rand=new Random();
+    private final SimpleDateFormat ISO8601FORMAT=new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+
+    public boolean reportedAWOL=false;
     public ContentTypeNegotiator conneg=null;
+    public HashMap<String, Integer> schemaMaximumRecords=new HashMap<String, Integer>();
     public HashMap<String, String> contentLocations=new HashMap<String, String>();
     public HashMap<String, String> mediaTypes=new HashMap<String, String>();
     public HashMap<String, String> recordSchemas=new HashMap<String, String>();
+    public HashMap<String, Transformer> transformers=new HashMap<String, Transformer>();
+    public HashMap<String, Normalizer.Form> normalForm=new HashMap<String, Normalizer.Form>();
     public HttpHeaderSetter httpHeaderSetter=null;
+    public long checkinTime=0, checkoutTime=0;
     public SearchRetrieveRequestType searchRequest;
     public SearchRetrieveResponseType response;
-    public String  baseURL=null, databaseTitle, dbname, explainStyleSheet=null,
-                   scanStyleSheet=null, searchStyleSheet=null;
+    public String  appStyleSheet=null, baseURL=null, checkoutReason=null,
+                   databaseTitle, dbname, explainStyleSheet=null,
+                   scanStyleSheet=null,
+                   searchStyleSheet=null, singleRecordStyleSheet=null,
+                   multipleRecordsStyleSheet=null, noRecordsStyleSheet=null;
 
     protected boolean     letDefaultsBeDefault=false;
     protected CQLParser   parser = new CQLParser(CQLParser.V1POINT1);
     protected DocumentBuilder docb = null;
-    protected Hashtable<String, String> nameSpaces=new Hashtable<String, String>(), schemas=new Hashtable<String, String>();
-    protected Hashtable   sortTools = new Hashtable();
-    protected Hashtable<String, Transformer> transformers=new Hashtable<String, Transformer>();
+    protected HashMap<String, String>
+                          nameSpaces=new HashMap<String, String>(),
+                          schemas=new HashMap<String, String>();
+//    protected HashMap     sortTools = new HashMap();
     protected int         defaultNumRecs=10, defaultResultSetTTL,
-                          maximumRecords=20, maxTerms = 9, position = 5;
+                          maximumRecords=20, maxTerms = 9, position = 5, useCount=0;
     protected Properties  dbProperties;
     protected SRWDatabase db;
     protected String      dbHome, dbPropertiesFileName, defaultMimeType="text/xml",
@@ -161,7 +144,7 @@ public abstract class SRWDatabase {
                           explainRecord=null, schemaInfo;
     
     
-    public String add(byte[] record) {
+    public String add(byte[] record, RecordMetadata metadata) {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
@@ -181,84 +164,39 @@ public abstract class SRWDatabase {
       throws InstantiationException {
     }
 
-    public Transformer addTransformer(String schemaName, String schemaID,
-      String transformerFileName, ArrayList parameterNames, ArrayList parameterValues)
-      throws FileNotFoundException, TransformerConfigurationException {
-        if(schemaID!=null) {
-            schemas.put(schemaName, schemaID);
-            schemas.put(schemaID, schemaID);
-        }
-        if(transformerFileName==null) {
-            log.info(schemaName+" transformer not specified");
-            log.info(".props filename is " + dbPropertiesFileName);
-            return null;
-        }
-        if(transformerFileName.startsWith("Renderer=")) // old notation, ignore
-            return null;
-//        StringTokenizer st=new StringTokenizer(transformerFileName, " \t=");
-//        String token=st.nextToken();
-        Source             xslSource;
-        TransformerFactory tFactory=
-            TransformerFactory.newInstance();
-        File f=Utilities.findFile(transformerFileName, dbHome, srwHome);
-        xslSource=new StreamSource(Utilities.openInputStream(
-            transformerFileName, dbHome, srwHome));
-        if(xslSource==null) {
-            log.error("Unable to make StreamSource for: "+
-                transformerFileName);
-            log.error(".props filename is " + dbPropertiesFileName);
-            return null;
-        }
-        try {
-            xslSource.setSystemId(f.toURI().toURL().toString());
-        }
-        catch(MalformedURLException e) {
-            log.error("trying to set the xslSource SystemID", e);
-        }
-
-        Transformer t=tFactory.newTransformer(xslSource);
-        // set any parameters to be passed to the transformer
-        if(parameterNames!=null)
-            for(int i=0; i<parameterNames.size(); i++)
-                t.setParameter((String)parameterNames.get(i), parameterValues.get(i));
-
-        transformers.put(schemaName, t);
-        if(schemaID!=null)
-            transformers.put(schemaID, t);
-        log.debug("added transformer for schemaName "+schemaName+", and schemaID "+schemaID);
-        return t;
-    }
-
-    public static synchronized void createDB(final String dbname, Properties properties)
+    public static synchronized void createDB(final String dbname, Properties srwServerProperties)
       throws InstantiationException {
-        createDB(dbname, properties, null, null);
+        createDB(dbname, srwServerProperties, null, null);
     }
 
-    public static synchronized void createDB(final String dbname, Properties properties, String context, HttpServletRequest request)
+    public static synchronized void createDB(final String dbname, Properties srwServerProperties, String context, HttpServletRequest request)
       throws InstantiationException {
         log.debug("Enter: initDB, dbname="+dbname);
+        if(srwServerProperties==null)
+            throw new InstantiationException("properties==null");
+        log.info("creating instance "+dbCount.get(dbname)+" of database "+dbname);
         String dbn="db."+dbname;
 
-        srwProperties=properties;
-        srwHome=properties.getProperty("SRW.Home");
+        srwProperties=srwServerProperties;
+        srwHome=srwServerProperties.getProperty("SRW.Home");
         servletContext=context;
         if(srwHome!=null && !srwHome.endsWith("/"))
             srwHome=srwHome+"/";
         log.debug("SRW.Home="+srwHome);
         Properties dbProperties=new Properties();
-        String dbHome=properties.getProperty(dbn+".home"),
-               dbPropertiesFileName=null;
+        String dbHome=srwServerProperties.getProperty(dbn+".home"),
+               dbPropertiesFileName;
         if(dbHome!=null) {
             if(!dbHome.endsWith("/"))
                 dbHome=dbHome+"/";
             log.debug("dbHome="+dbHome);
         }
 
-        String className=properties.getProperty(dbn+".class");
+        String className=srwServerProperties.getProperty(dbn+".class");
         log.debug("className="+className);
         if(className==null) {
             // let's see if there's a fallback database to use
-            className=properties.getProperty("db.default.class");
+            className=srwServerProperties.getProperty("db.default.class");
             if(className==null)
                 throw new InstantiationException("No "+
                     dbn+".class entry in properties file");
@@ -300,22 +238,32 @@ public abstract class SRWDatabase {
             className="ORG.oclc.os.SRW.DSpaceLucene.SRWLuceneDatabase";
             log.debug("new className="+className);
         }
-        SRWDatabase db=null;
+        SRWDatabase db;
         try {
             log.debug("creating class "+className);
-            Class  dbClass=Class.forName(className);
+            Class<? extends SRWDatabase>  dbClass = Class.forName(className).asSubclass(SRWDatabase.class);
             log.debug("creating instance of class "+dbClass);
-            db=(SRWDatabase)dbClass.newInstance();
+            db=dbClass.newInstance();
             log.debug("class created");
         }
-        catch(Exception e) {
+        catch(ClassNotFoundException e) {
             log.error("Unable to create Database class "+className+
                 " for database "+dbname);
             log.error(e, e);
             throw new InstantiationException(e.getMessage());
+        } catch (IllegalAccessException e) {
+            log.error("Unable to create Database class "+className+
+                    " for database "+dbname);
+            log.error(e, e);
+            throw new InstantiationException(e.getMessage());
+        } catch (InstantiationException e) {
+            log.error("Unable to create Database class "+className+
+                    " for database "+dbname);
+            log.error(e, e);
+            throw new InstantiationException(e.getMessage());
         }
 
-        dbPropertiesFileName=properties.getProperty(dbn+".configuration");
+        dbPropertiesFileName=srwServerProperties.getProperty(dbn+".configuration");
         if(db.hasaConfigurationFile() || dbPropertiesFileName!=null) {
             if(dbPropertiesFileName==null) {
                 throw new InstantiationException("No "+dbn+
@@ -333,11 +281,13 @@ public abstract class SRWDatabase {
                 log.error("Unable to open database configuration file!");
                 log.error(e);
             }
-            catch(Exception e) {
+            catch(IOException e) {
                 log.error("Unable to load database configuration file!");
                 log.error(e, e);
             }
             makeUnqualifiedIndexes(dbProperties);
+            if(srwServerProperties.getProperty("hostAndPort")!=null)
+                dbProperties.setProperty("hostAndPort", srwServerProperties.getProperty("hostAndPort"));
             try {
                 db.init(dbname, srwHome, dbHome, dbPropertiesFileName, dbProperties, request);
             }
@@ -359,7 +309,7 @@ public abstract class SRWDatabase {
                     urlStr.append(contextPath.substring(1));
                 }
                 int pathInfoIndex=Integer.parseInt(
-                    properties.getProperty("pathInfoIndex", "1"));
+                    srwServerProperties.getProperty("pathInfoIndex", "1"));
                 String path=request.getPathInfo();
                 StringBuilder newPath=new StringBuilder();
                 if(path!=null) {
@@ -409,10 +359,11 @@ public abstract class SRWDatabase {
                 catch(NumberFormatException e) {
                     log.error("bad value for defaultResultSetTTL: \""+temp+"\"");
                     log.error("defaultResultSetTTL parameter ignored");
+                    db.setDefaultResultSetTTL(DefaultResultSetTTL);
                 }
             }
             else
-                db.setDefaultResultSetTTL(300);
+                db.setDefaultResultSetTTL(DefaultResultSetTTL);
 
             temp=dbProperties.getProperty("letDefaultsBeDefault");
             if(temp!=null && temp.equals("true"))
@@ -428,7 +379,7 @@ public abstract class SRWDatabase {
                 log.error(e, e);
                 throw new InstantiationException(e.getMessage());
             }
-            db.setDefaultResultSetTTL(300);
+            db.setDefaultResultSetTTL(DefaultResultSetTTL);
             log.info("no configuration file needed or specified");
         }
 
@@ -437,20 +388,24 @@ public abstract class SRWDatabase {
             if(queue==null)
                 queue=new LinkedList<SRWDatabase>();
             queue.add(db);
+            allDbs.add(db);
             if(log.isDebugEnabled())
                 log.debug(dbname+" has "+queue.size()+" copies");
             dbs.put(dbname, queue);
         }
+        if(dbCount.containsKey(dbname))
+            dbCount.put(dbname, dbCount.get(dbname)+1);
+        else
+            dbCount.put(dbname, 1);
         log.debug("Exit: initDB");
-        return;
     }
 
 
-    public boolean delete(String recordID) {
+    public boolean delete(String recordID, RecordMetadata metadata) throws Exception {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
-    public ExplainResponseType diagnostic(final int code,
+    public static ExplainResponseType diagnostic(final int code,
       final String details, final ExplainResponseType response) {
         boolean         addDiagnostics=false;
         DiagnosticsType diagnostics=response.getDiagnostics();
@@ -463,7 +418,7 @@ public abstract class SRWDatabase {
     }
 
 
-    public ScanResponseType diagnostic(final int code,
+    public static ScanResponseType diagnostic(final int code,
       final String details, final ScanResponseType response) {
         boolean         addDiagnostics=false;
         DiagnosticsType diagnostics=response.getDiagnostics();
@@ -476,7 +431,7 @@ public abstract class SRWDatabase {
     }
 
 
-    public SearchRetrieveResponseType diagnostic(final int code,
+    public static SearchRetrieveResponseType diagnostic(final int code,
       final String details, final SearchRetrieveResponseType response) {
         boolean         addDiagnostics=false;
         DiagnosticsType diagnostics=response.getDiagnostics();
@@ -497,7 +452,7 @@ public abstract class SRWDatabase {
         if(version!=null && !version.equals("1.1"))
             return diagnostic(SRWDiagnostic.UnsupportedVersion, version, scanResponse);
 
-        CQLTermNode root = null;
+        CQLTermNode root;
         int max = maxTerms,  pos = position;
         long startTime = System.currentTimeMillis();
         PositiveInteger pi = request.getMaximumTerms();
@@ -509,10 +464,8 @@ public abstract class SRWDatabase {
         if(nni!=null)
             pos=nni.intValue();
         String scanTerm = request.getScanClause();
-        try{
-            if (scanTerm!=null)
-                log.info("scanTerm:\n" + Utilities.byteArrayToString(scanTerm.getBytes("UTF-8")));
-        } catch (Exception e){}
+        if (scanTerm!=null)
+            log.info("scanTerm:\n" + Utilities.byteArrayToString(scanTerm.getBytes(Charset.forName("UTF-8"))));
         log.info("maxTerms="+max+", position="+pos);
         try {
             root = Utilities.getFirstTerm(parser.parse(scanTerm));
@@ -529,7 +482,7 @@ public abstract class SRWDatabase {
             // The method getQualifier() was replaced by getIndex() in version 
             // 1.0 of the parser. This code ensures that either one works.
             //root = new CQLTermNode(root.getQualifier(), root.getRelation(), "$");
-            root = new CQLTermNode(SRWSoapBindingImpl.getQualifier(root), root.getRelation(), "$");
+            root = new CQLTermNode(SRWSoapBindingImpl.getQualifier(root), root.getRelation(), "!");
         String resultSetID = root.getResultSetName();
         if (resultSetID!=null) { // you can't scan on resultSetId!
             return diagnostic(SRWDiagnostic.UnsupportedIndex,
@@ -540,7 +493,7 @@ public abstract class SRWDatabase {
         terms.setTerm(tl.getTerms());
         scanResponse.setTerms(terms);
 
-        Vector<DiagnosticType> diagnostics = tl.getDiagnostics();
+        ArrayList<DiagnosticType> diagnostics = tl.getDiagnostics();
         if (diagnostics!=null && !diagnostics.isEmpty()) {
             DiagnosticType diagArray[] = new DiagnosticType[diagnostics.size()];
             diagnostics.toArray(diagArray);
@@ -572,9 +525,7 @@ public abstract class SRWDatabase {
             return diagnostic(SRWDiagnostic.MandatoryParameterNotSupplied, "query", response);
 
         if(log.isDebugEnabled())
-            try{
-                log.debug("query:\n" + Utilities.byteArrayToString(query.getBytes("UTF-8")));
-            } catch (Exception e){}
+            log.debug("query:\n" + Utilities.byteArrayToString(query.getBytes(Charset.forName("UTF-8"))));
 
         String recordPacking = request.getRecordPacking();
         if(recordPacking==null) {
@@ -597,6 +548,9 @@ public abstract class SRWDatabase {
             try {
                 result = getQueryResult(query, request);
             } catch (InstantiationException e) {
+                log.error("Exception "+e.getMessage()+" caught while doing query:");
+                log.error(Utilities.byteArrayToString(query.getBytes(Charset.forName("UTF-8"))));
+                log.error("request: "+request);
                 log.error(e, e);
                 return diagnostic(SRWDiagnostic.GeneralSystemError,
                         e.getMessage(), response);
@@ -612,6 +566,7 @@ public abstract class SRWDatabase {
         if(nni!=null)
             resultSetTTL=nni.intValue();
         result.setResultSetIdleTime(resultSetTTL);
+        response.setResultSetIdleTime(new PositiveInteger(Integer.toString(resultSetTTL+1)));
         if (postingsCount>0) {  // we don't mess with records otherwise
             if (resultSetTTL>0 && returnResultSetId) {
                 // cache the resultSet and set (or reset) its timer
@@ -628,9 +583,30 @@ public abstract class SRWDatabase {
             }
 
             int numRecs = defaultNumRecs;
+            String schemaName = request.getRecordSchema();
+            log.debug("request.getRecordSchema()="+schemaName);
+            if(schemaName==null)
+                schemaName="default";
+            log.debug("schemaName="+schemaName);
+            String schemaID=null;
+//            if(!letDefaultsBeDefault && !schemaName.equals("default")) {
+            if(!letDefaultsBeDefault) {
+                schemaID = getSchemaID(schemaName);
+                if(schemaID==null) {
+                    log.debug("unknown schema: "+schemaName);
+                    diagnostic(SRWDiagnostic.UnknownSchemaForRetrieval, schemaName, response);
+                    numRecs=0;
+                }
+            }
+            
             NonNegativeInteger maxRecs = request.getMaximumRecords();
             if (maxRecs!=null)
                 numRecs = (int) Math.min(maxRecs.longValue(), maximumRecords);
+            Integer schemaNumRecs=schemaMaximumRecords.get(schemaID);
+            log.info("schemaID="+schemaID+", schemaNumRecs="+schemaNumRecs+", numRecs="+numRecs);
+            if(schemaNumRecs!=null && schemaNumRecs<numRecs)
+                numRecs=schemaNumRecs;
+            log.info("numRecs="+numRecs);
 
             long startPoint = 1;
             PositiveInteger startRec = request.getStartRecord();
@@ -649,19 +625,6 @@ public abstract class SRWDatabase {
                 numRecs=0;
             }
 
-            String schemaName = request.getRecordSchema();
-            if(schemaName==null)
-                schemaName="default";
-            String schemaID=null;
-            if(!letDefaultsBeDefault || !schemaName.equals("default")) {
-                schemaID = getSchemaID(schemaName);
-                if(schemaID==null) {
-                    log.debug("unknown schema: "+schemaName);
-                    diagnostic(SRWDiagnostic.UnknownSchemaForRetrieval, schemaName, response);
-                    numRecs=0;
-                }
-            }
-            
             if (numRecs==0)
                 response.setNextRecordPosition(new PositiveInteger("1"));
             else
@@ -746,20 +709,22 @@ public abstract class SRWDatabase {
                             log.debug("reusing old sorted resultSet");
                         }
                         if(sortedResult==null)
-                            diagnostic(SRWDiagnostic.SortNotSupported,
+                            return diagnostic(SRWDiagnostic.SortNotSupported,
                                 null, response);
                         else
                             result=sortedResult;
                     }  // if(sortKeys!=null && sortKeys.length()>0)
                     
-                                        // render some records
-                                        RecordIterator list = null;
+                    // render some records
+                    RecordIterator list;
                     try {
                         log.debug("making RecordIterator, startPoint="+startPoint+", schemaID="+schemaID);
                         list=result.recordIterator(startPoint, numRecs, schemaID, request.getExtraRequestData());
+                        if(list==null)
+                            throw new InstantiationException();
                     } catch (InstantiationException e) {
                         log.error(e, e);
-                        diagnostic(SRWDiagnostic.GeneralSystemError,
+                        return diagnostic(SRWDiagnostic.GeneralSystemError,
                             e.getMessage(), response);
                     }
                     RecordsType records = new RecordsType();
@@ -778,7 +743,7 @@ public abstract class SRWDatabase {
                     log.debug("trying to get "+numRecs+
                         " records starting with record "+startPoint+
                         " from a set of "+postingsCount+" records");
-                    for (i=0; list!=null && i<numRecs && list.hasNext(); i++) {
+                    for (i=0; i<numRecs && list.hasNext(); i++) {
                         rt = new RecordType();
                         rt.setRecordPacking(recordPacking);
                         frag = new StringOrXmlFragment();
@@ -789,10 +754,8 @@ public abstract class SRWDatabase {
                             log.debug("rec="+rec);
                             recStr=transform(rec, schemaID).getRecord();
                             if (log.isDebugEnabled())
-                                try {
-                                    log.debug("Transformed XML:\n" + Utilities.byteArrayToString(
-                                        recStr.getBytes("UTF8")));
-                                } catch (UnsupportedEncodingException e) {} // can't happen
+                                log.debug("Transformed XML:\n" + Utilities.byteArrayToString(
+                                    recStr.getBytes(Charset.forName("UTF-8"))));
                             makeElem(recStr, rt, schemaID, schemaName, recordPacking, docb, elems);
                             if(rec.hasExtraRecordInfo())
                                 setExtraRecordData(rt, rec.getExtraRecordInfo());
@@ -813,9 +776,10 @@ public abstract class SRWDatabase {
                                 log.error(e, e);
                                 break;
                             }
-                        } catch (NoSuchElementException e) {
                             log.error("error getting document "+(i+1)+", postings="+postingsCount);
                             log.error(e, e);
+                        } catch (NoSuchElementException e) {
+                            log.error("error getting document "+(i+1)+", postings="+postingsCount);                            log.error(e, e);
                             try {
                                 makeElem(SRWDiagnostic.newSurrogateDiagnostic(
                                     "info:srw/diagnostic/1/",
@@ -848,10 +812,8 @@ public abstract class SRWDatabase {
                             }
                             log.error("error getting document "+(i+1)+", postings="+postingsCount);
                             log.error(e, e);
-                            try {
-                                log.error("Bad record:\n" + Utilities.byteArrayToString(
-                                        recStr.getBytes("UTF8")));
-                            } catch (UnsupportedEncodingException e2) {} // can't happen
+                            log.error("Bad record:\n" + Utilities.byteArrayToString(
+                                    recStr.getBytes(Charset.forName("UTF-8"))));
                         } catch (SRWDiagnostic e) {
                             try {
                                 makeElem(SRWDiagnostic.newSurrogateDiagnostic(
@@ -868,10 +830,8 @@ public abstract class SRWDatabase {
                             }
                             log.error("error getting document "+(i+1)+", postings="+postingsCount);
                             log.error(e, e);
-                            try {
-                                log.error("Bad record:\n" + Utilities.byteArrayToString(
-                                        recStr.getBytes("UTF8")));
-                            } catch (UnsupportedEncodingException e2) {} // can't happen
+                            log.error("Bad record:\n" + Utilities.byteArrayToString(
+                                    recStr.getBytes(Charset.forName("UTF-8"))));
                         }
 
                         rt.setRecordData(frag);
@@ -880,6 +840,7 @@ public abstract class SRWDatabase {
 
                         records.setRecord(i, rt);
                     }
+                    list.close();
                     response.setRecords(records);
                     if (startPoint+i<=postingsCount)
                         response.setNextRecordPosition(new PositiveInteger(Long.toString(startPoint+i)));
@@ -890,7 +851,7 @@ public abstract class SRWDatabase {
         if(extraResponseData!=null)
             setExtraResponseData(response, extraResponseData);
 
-        Vector<DiagnosticType> diagnostics = result.getDiagnostics();
+        ArrayList<DiagnosticType> diagnostics = result.getDiagnostics();
         if (diagnostics!=null && !diagnostics.isEmpty()) {
             DiagnosticType diagArray[] = new DiagnosticType[diagnostics.size()];
             diagnostics.toArray(diagArray);
@@ -910,12 +871,23 @@ public abstract class SRWDatabase {
 //        }
     }
 
-
     public String extractRecordIdFromUri(String uri) {
-        log.info("uri="+uri);
-        extractRecordIdFromUriPatternMatcher.reset(uri);
+        String decodedURI=null;
+        try {
+            decodedURI = URLDecoder.decode(uri, "UTF-8");
+        } catch (UnsupportedEncodingException ex) {
+            log.error("undecodable URI: "+uri, ex);
+        }
+        log.info("uri="+decodedURI);
+        extractRecordIdFromUriPatternMatcher.reset(decodedURI);
         if(extractRecordIdFromUriPatternMatcher.find()) {
-            return extractRecordIdFromUriPatternMatcher.group(1);
+            log.info("groupCount="+extractRecordIdFromUriPatternMatcher.groupCount());
+            StringBuilder sb=new StringBuilder();
+            for(int i=1; i<=extractRecordIdFromUriPatternMatcher.groupCount(); i++) {
+                log.info("group("+i+")="+extractRecordIdFromUriPatternMatcher.group(i));
+                sb.append(extractRecordIdFromUriPatternMatcher.group(i));
+            }
+            return sb.toString();
         }
         log.info("recordID not found.  Pattern="+extractRecordIdFromUriPatternMatcher.pattern());
         return null;
@@ -979,12 +951,13 @@ public abstract class SRWDatabase {
     }
 
 
-    public static SRWDatabase getDB(String dbname, Properties properties) {
-        return getDB(dbname, properties, null, null);
+    public static SRWDatabase getDB(String dbname, Properties srwServerProperties) {
+        return getDB(dbname, srwServerProperties, null, null);
     }
-    public static SRWDatabase getDB(String dbname, Properties properties, String servletContext, HttpServletRequest request) {
+    public static SRWDatabase getDB(String dbname, Properties srwServerProperties, String servletContext, HttpServletRequest request) {
         log.debug("enter SRWDatabase.getDB");
-        if(badDbs.get(dbname)!=null) // we've seen this one before
+//        new Exception("getDB called").printStackTrace();
+        if(badDbs.contains(dbname)) // we've seen this one before
             return null;
 
         LinkedList<SRWDatabase> queue=dbs.get(dbname);
@@ -1006,10 +979,18 @@ public abstract class SRWDatabase {
                 log.debug("done synchronize #1 on queue");
             }
             if(db==null) {
-                log.info("Opening an SRW database for "+dbname);
+                if(request!=null)
+                    log.info("Opening an SRW database for "+dbname+
+                        " for request "+request.getContextPath()+"?"+
+                        request.getQueryString()+
+                        " for IP "+request.getRemoteAddr());
+                else {
+                    log.info("Opening an SRW database for "+dbname);
+                    log.info("called from ", new Exception());
+                }
                 try{
                     while(db==null) {
-                        createDB(dbname, properties, servletContext, request);
+                        createDB(dbname, srwServerProperties, servletContext, request);
                         queue=dbs.get(dbname);
                         log.debug("about to synchronize #2 on queue");
                         synchronized(queue) {
@@ -1017,10 +998,13 @@ public abstract class SRWDatabase {
                                 db=queue.removeFirst();
                         }
                     }
-                log.debug("done synchronize #2 on queue");
+                    log.debug("done synchronize #2 on queue");
                 }
-                catch(Exception e) { // database not available
-                    badDbs.put(dbname, dbname);
+                catch(InstantiationException e) { // database not available
+                    // but, we don't want to mark a database that was good
+                    // as bad now because of some transient error
+                    if(!goodDbs.contains(dbname)) // we've never had it before
+                        badDbs.add(dbname); // mark it as a bad dbname
                     log.error(e, e);
                     return null;
                 }
@@ -1029,9 +1013,22 @@ public abstract class SRWDatabase {
         catch(Exception e) {
             log.error(e,e);
             log.error("shoot!");
+            return null;
         }
         if(log.isDebugEnabled())
             log.debug("getDB: db="+db);
+        goodDbs.add(dbname);
+        if(db.useCount!=0) {
+            // we're trying to check out something that is in use!
+            // let's drop this one on the floor, hoping that whoever checked
+            // it out will return it eventually, and ask for a new one
+            log.error("dropping db="+db);
+            return getDB(dbname, srwServerProperties, servletContext, request);
+        }
+        db.useCount++;
+        if(request!=null)
+            db.checkoutReason=request.getQueryString();
+        db.checkoutTime=System.currentTimeMillis();
         log.debug("exit SRWDatabase.getDB");
         return db;
     }
@@ -1132,7 +1129,7 @@ public abstract class SRWDatabase {
         return null;
     }
 
-    public static ArrayList getResultSetIds(CQLNode root) throws SRWDiagnostic {
+    public static ArrayList<String> getResultSetIds(CQLNode root) throws SRWDiagnostic {
         ArrayList<String> resultSetIds=new ArrayList<String>();
         getResultSetIds(root, resultSetIds);
         return resultSetIds;
@@ -1164,6 +1161,8 @@ public abstract class SRWDatabase {
      *  This class assumes that schema information was provided in the .props
      *  file for this database.  This method provides a way for extending
      *  classes to provide the schemaName to schemaID mapping themselves.
+     * @param schemaName
+     * @return 
      */
     public String getSchemaID(String schemaName) {
         return schemas.get(schemaName);
@@ -1197,182 +1196,251 @@ public abstract class SRWDatabase {
             log.error(e, e);
         }
 
-        if(dbProperties!=null) {
-            String httpHeaderSetterClass=dbProperties.getProperty("HttpHeaderSetter");
-            if(httpHeaderSetterClass!=null) {
+        if(dbProperties==null) {
+            log.warn("No properties file provided for database "+dbname);
+            return;
+        }
+
+        String httpHeaderSetterClass=dbProperties.getProperty("HttpHeaderSetter");
+        if(httpHeaderSetterClass!=null) {
+            try {
+                httpHeaderSetter = (HttpHeaderSetter) Class.forName(httpHeaderSetterClass).newInstance();
+                httpHeaderSetter.init(dbProperties);
+            }
+            catch (InstantiationException ex) {
+                log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
+            }
+            catch (IllegalAccessException ex) {
+                log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
+            }
+            catch (ClassNotFoundException ex) {
+                log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
+            }
+        }
+
+        // if the client doesn't say what they want, what should they get?
+        // typically, this only happens with applications that don't set
+        // the "accept" header, i.e., non-browser applications.  The
+        // default value is set to text/xml, assuming that non-browser apps
+        // want to see the full xml, not some rendered html
+        defaultMimeType=dbProperties.getProperty("defaultMimeType", defaultMimeType);
+
+        // get schema transformers
+        String          firstSchema=null, xmlSchemaList=dbProperties.getProperty("xmlSchemas");
+        StringBuilder    schemaInfoBuf=new StringBuilder("        <schemaInfo>\n");
+        StringTokenizer st;
+        if(xmlSchemaList!=null) {
+            String      name, schemaIdentifier, schemaName, transformerName,
+                        value;
+            ArrayList<String> parms, values;
+            st=new StringTokenizer(xmlSchemaList, ", \t");
+            log.info("xmlSchemaList="+xmlSchemaList);
+            while(st.hasMoreTokens()) {
+                schemaName=st.nextToken();
+                log.debug("looking for schema "+schemaName);
+                if(firstSchema==null)
+                    firstSchema=schemaName;
+                schemaIdentifier=dbProperties.getProperty(schemaName+".identifier");
+                transformerName=dbProperties.getProperty(schemaName+".transformer");
+                if(transformerName==null) {
+                    // maybe this is an old .props file and the transformer name
+                    // is associated with the bare schemaName
+                    transformerName=dbProperties.getProperty(schemaName);
+                }
+                parms=new ArrayList<String>();
+                values=new ArrayList<String>();
+                Enumeration<Object> propertyNames = dbProperties.keys();
+                while(propertyNames.hasMoreElements()) {
+                    name=(String) propertyNames.nextElement();
+                    if(name.startsWith(schemaName+".parameter.")) {
+                        value=dbProperties.getProperty(name);
+                        values.add(value);
+                        name=name.substring(schemaName.length()+11);
+                        parms.add(name);
+                        if(log.isDebugEnabled())
+                            log.debug("transformer parm: "+name+"="+value);
+                    }
+                }
+
+                String s=dbProperties.getProperty(schemaName+".maximumRecords");
+                if(s!=null) {
+                    schemaMaximumRecords.put(schemaName, Integer.parseInt(s));
+                    if(schemaIdentifier!=null)
+                        schemaMaximumRecords.put(schemaIdentifier, Integer.parseInt(s));
+                }
+
                 try {
-                    httpHeaderSetter = (HttpHeaderSetter) Class.forName(httpHeaderSetterClass).newInstance();
-                    httpHeaderSetter.init(dbProperties);
-                }
-                catch (InstantiationException ex) {
-                    log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
-                }
-                catch (IllegalAccessException ex) {
-                    log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
-                }
-                catch (ClassNotFoundException ex) {
-                    log.error("Unable to create HttpHeaderSetter: "+httpHeaderSetterClass, ex);
-                }
-            }
-
-            // if the client doesn't say what they want, what should they get?
-            // typically, this only happens with applications that don't set
-            // the "accept" header, i.e., non-browser applications.  The
-            // default value is set to text/xml, assuming that non-browser apps
-            // want to see the full xml, not some rendered html
-            defaultMimeType=dbProperties.getProperty("defaultMimeType", defaultMimeType);
-
-            // get schema transformers
-            String          firstSchema=null, xmlSchemaList=dbProperties.getProperty("xmlSchemas");
-            StringBuilder    schemaInfoBuf=new StringBuilder("        <schemaInfo>\n");
-            StringTokenizer st;
-            if(xmlSchemaList!=null) {
-                Enumeration propertyNames;
-                String      name, schemaIdentifier, schemaName, transformerName,
-                            value;
-                ArrayList<String> parms, values;
-                st=new StringTokenizer(xmlSchemaList, ", \t");
-                log.info("xmlSchemaList="+xmlSchemaList);
-                while(st.hasMoreTokens()) {
-                    schemaName=st.nextToken();
-                    log.debug("looking for schema "+schemaName);
-                    if(firstSchema==null)
-                        firstSchema=schemaName;
-                    schemaIdentifier=dbProperties.getProperty(schemaName+".identifier");
-                    transformerName=dbProperties.getProperty(schemaName+".transformer");
-                    if(transformerName==null) {
-                        // maybe this is an old .props file and the transformer name
-                        // is associated with the bare schemaName
-                        transformerName=dbProperties.getProperty(schemaName);
+                    if(schemaIdentifier!=null) {
+                        schemas.put(schemaName, schemaIdentifier);
+                        schemas.put(schemaIdentifier, schemaIdentifier);
                     }
-                    parms=new ArrayList<String>();
-                    values=new ArrayList<String>();
-                    propertyNames=dbProperties.propertyNames();
-                    while(propertyNames.hasMoreElements()) {
-                        name=(String)propertyNames.nextElement();
-                        if(name.startsWith(schemaName+".parameter.")) {
-                            value=dbProperties.getProperty(name);
-                            values.add(value);
-                            name=name.substring(schemaName.length()+11);
-                            parms.add(name);
-                            if(log.isDebugEnabled())
-                                log.debug("transformer parm: "+name+"="+value);
-                        }
-                    }
-
-                    try {
-                        addTransformer(schemaName, schemaIdentifier, transformerName, parms, values);
-                        addRenderer(schemaName, schemaIdentifier, dbProperties);
-                        String schemaLocation=dbProperties.getProperty(schemaName+".location");
-                        String schemaTitle=dbProperties.getProperty(schemaName+".title");
-                        String schemaNamespace=dbProperties.getProperty(schemaName+".namespace");
-                        if(schemaNamespace!=null)
-                            nameSpaces.put(schemaName, schemaNamespace);
-                        else
-                            nameSpaces.put(schemaName, "NoNamespaceProvided");
-                        schemaInfoBuf.append("          <schema sort=\"false\" retrieve=\"true\"")
-                                     .append(" name=\"").append(schemaName)
-                                     .append("\"\n              identifier=\"").append(schemaIdentifier)
-                                     .append("\"\n              location=\"").append(schemaLocation).append("\">\n")
-                                     .append("            <title>").append(schemaTitle).append("</title>\n")
-                                     .append("            </schema>\n");
-                    }
-                    catch(Exception e) {
-                        log.error("Unable to load schema "+schemaName);
-                        log.error(e, e);
-                    }
-                }
-
-                defaultSchema=dbProperties.getProperty("defaultSchema");
-                if(defaultSchema==null)
-                    defaultSchema=firstSchema;
-                log.info("defaultSchema="+defaultSchema);
-                schemaIdentifier=schemas.get(defaultSchema);
-                log.info("default schemaID="+schemaIdentifier);
-                if(schemaIdentifier==null)
-                    log.error("Default schema "+defaultSchema+" not loaded");
-                else {
-                    schemas.put("default", schemaIdentifier);
-                    Transformer t=transformers.get(defaultSchema);
+                    Transformer t = Utilities.addTransformer(schemaName,
+                            transformerName, dbHome, parms, values,
+                            dbProperties, dbPropertiesFileName);
                     if(t!=null) {
-                        transformers.put("default", t);
+                        transformers.put(schemaName, t);
+                        if(schemaIdentifier!=null)
+                            transformers.put(schemaIdentifier, t);
                     }
+                    addRenderer(schemaName, schemaIdentifier, dbProperties);
+                    String schemaLocation=dbProperties.getProperty(schemaName+".location");
+                    String schemaTitle=dbProperties.getProperty(schemaName+".title");
+                    String schemaNamespace=dbProperties.getProperty(schemaName+".namespace");
+                    if(schemaNamespace!=null)
+                        nameSpaces.put(schemaName, schemaNamespace);
+                    else
+                        nameSpaces.put(schemaName, "NoNamespaceProvided");
+                    schemaInfoBuf.append("          <schema sort=\"false\" retrieve=\"true\"")
+                                 .append(" name=\"").append(schemaName)
+                                 .append("\"\n              identifier=\"").append(schemaIdentifier)
+                                 .append("\"\n              location=\"").append(schemaLocation).append("\">\n")
+                                 .append("            <title>").append(schemaTitle).append("</title>\n")
+                                 .append("            </schema>\n");
+                }
+                catch(FileNotFoundException e) {
+                    log.error("Unable to load schema "+schemaName);
+                    log.error(e, e);
+                } catch (TransformerConfigurationException e) {
+                    log.error("Unable to load schema "+schemaName);
+                    log.error(e, e);
+                } catch (UnsupportedEncodingException e) {
+                    log.error("Unable to load schema "+schemaName);
+                    log.error(e, e);
+                } catch (InstantiationException e) {
+                    log.error("Unable to load schema "+schemaName);
+                    log.error(e, e);
                 }
             }
-            schemaInfoBuf.append("          </schemaInfo>\n");
-            schemaInfo=schemaInfoBuf.toString();
 
+            defaultSchema=dbProperties.getProperty("defaultSchema");
+            if(defaultSchema==null)
+                defaultSchema=firstSchema;
+            log.info("defaultSchema="+defaultSchema);
+            schemaIdentifier=schemas.get(defaultSchema);
+            log.info("default schemaID="+schemaIdentifier);
+            if(schemaIdentifier==null)
+                log.error("Default schema "+defaultSchema+" not loaded");
+            else {
+                schemas.put("default", schemaIdentifier);
+                Transformer t=transformers.get(defaultSchema);
+                if(t!=null) {
+                    transformers.put("default", t);
+                }
+            }
+        }
+        schemaInfoBuf.append("          </schemaInfo>\n");
+        schemaInfo=schemaInfoBuf.toString();
+
+        if(srwProperties!=null) {
             String t=srwProperties.getProperty("SRW.Context");
             if(t!=null)
                 servletContext=t;
-            explainStyleSheet=dbProperties.getProperty("explainStyleSheet");
-            if(explainStyleSheet==null)
-                explainStyleSheet="/$context/explainResponse.xsl";
-            searchStyleSheet=dbProperties.getProperty("searchStyleSheet");
-            if(searchStyleSheet==null)
-                searchStyleSheet="/$context/searchRetrieveResponse.xsl";
-            scanStyleSheet=dbProperties.getProperty("scanStyleSheet");
-            if(scanStyleSheet==null)
-                scanStyleSheet="/$context/scanResponse.xsl";
-            if(servletContext!=null && servletContext.startsWith("/"))
-                servletContext=servletContext.substring(1);
-            if(servletContext!=null && servletContext.length()>0) {
-                explainStyleSheet=explainStyleSheet.replace("$context", servletContext);
-                searchStyleSheet=searchStyleSheet.replace("$context", servletContext);
-                scanStyleSheet=scanStyleSheet.replace("$context", servletContext);
-            }
-            else {
-                explainStyleSheet=explainStyleSheet.replace("/$context", "");
-                searchStyleSheet=searchStyleSheet.replace("/$context", "");
-                scanStyleSheet=scanStyleSheet.replace("/$context", "");
-            }
+        }
+        explainStyleSheet=dbProperties.getProperty("explainStyleSheet");
+        if(explainStyleSheet==null)
+            explainStyleSheet="/$context/explainResponse.xsl";
+        searchStyleSheet=dbProperties.getProperty("searchStyleSheet");
+        singleRecordStyleSheet=dbProperties.getProperty("singleRecordStyleSheet");
+        multipleRecordsStyleSheet=dbProperties.getProperty("multipleRecordsStyleSheet");
+        noRecordsStyleSheet=dbProperties.getProperty("noRecordsStyleSheet");
+        if(searchStyleSheet==null && singleRecordStyleSheet==null && multipleRecordsStyleSheet==null)
+            searchStyleSheet="/$context/searchRetrieveResponse.xsl";
+        scanStyleSheet=dbProperties.getProperty("scanStyleSheet");
+        if(scanStyleSheet==null)
+            scanStyleSheet="/$context/scanResponse.xsl";
+        appStyleSheet=dbProperties.getProperty("APPStyleSheet");
+        if(servletContext!=null && servletContext.startsWith("/"))
+            servletContext=servletContext.substring(1);
+        if(servletContext!=null && servletContext.length()>0) {
+            explainStyleSheet=explainStyleSheet.replace("$context", servletContext);
+            searchStyleSheet=searchStyleSheet.replace("$context", servletContext);
+            scanStyleSheet=scanStyleSheet.replace("$context", servletContext);
+        }
+        else {
+            explainStyleSheet=explainStyleSheet.replace("/$context", "");
+            searchStyleSheet=searchStyleSheet.replace("/$context", "");
+            scanStyleSheet=scanStyleSheet.replace("/$context", "");
+        }
 
-            conneg=new ContentTypeNegotiator();
-            Enumeration enumer = dbProperties.keys();
-            int offset;
-            String contentLocation, key, mediaType, mimeType, name, recordSchema, value;
-            VariantSpec vs;
-            while(enumer.hasMoreElements()) {
-                key=(String)enumer.nextElement();
-                offset=key.indexOf("mimeTypes");
-                if(offset>0) {
-                    name=key.substring(0, offset-1);
-                    value=dbProperties.getProperty(key);
-                    log.info(key+"="+value);
-                    st=new StringTokenizer(value, ", ");
-                    mimeType=st.nextToken();
-                    vs=conneg.addVariant(mimeType);
-                    mediaType=vs.getMediaType().getMediaType();
-                    try {
-                        addTransformer(mediaType, null, dbProperties.getProperty(name+".styleSheet"), null, null);
-                        while(st.hasMoreTokens())
-                            vs.addAliasMediaType(st.nextToken());
-                    } catch (Exception e) {
-                        log.error("Unable to stylesheet "+dbProperties.getProperty(name+".styleSheet"));
-                        log.error(e, e);
+        conneg=new ContentTypeNegotiator();
+        log.debug("conneg="+conneg);
+        Enumeration<Object> propertyNames = dbProperties.keys();
+        int offset;
+        String contentLocation, key, mediaType, mimeType, name, form,
+               recordSchema, value;
+        VariantSpec vs;
+        while(propertyNames.hasMoreElements()) {
+            key=(String) propertyNames.nextElement();
+            offset=key.indexOf("mimeTypes");
+            if(offset>0) {
+                name=key.substring(0, offset-1);
+                value=dbProperties.getProperty(key);
+                log.info(key+"="+value);
+                st=new StringTokenizer(value, ", ");
+                mimeType=st.nextToken();
+                vs=conneg.addVariant(mimeType);
+                mediaType=vs.getMediaType().getMediaType();
+                try {
+                    Transformer t = Utilities.addTransformer(mediaType,
+                            dbProperties.getProperty(name+".styleSheet"),
+                            dbHome, null, null, dbProperties, dbPropertiesFileName);
+                    if(t!=null) {
+                        transformers.put(mediaType, t);
                     }
-                    // we should only need this when the transformer
-                    // can't run from the default schema
-                    recordSchema=dbProperties.getProperty(name+".recordSchema");
-                    if(recordSchema!=null && transformers.get(recordSchema)==null) {
-                        recordSchemas.put(mediaType, recordSchema);
-                        log.info("mediaType: "+mediaType+" requires recordSchema: "+dbProperties.getProperty(name+".recordSchema"));
-                    }
-                    contentLocation=dbProperties.getProperty(name+".ContentLocation");
-                    if(contentLocation!=null) {
-                        contentLocations.put(mediaType, contentLocation);
-                        log.info("mediaType: "+mediaType+" ContentLocation: "+contentLocation);
-                    }
+                    while(st.hasMoreTokens())
+                        vs.addAliasMediaType(st.nextToken());
+                } catch (FileNotFoundException e) {
+                    log.error("Unable to add stylesheet "+dbProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                    log.error(e, e);
+                } catch (TransformerConfigurationException e) {
+                    log.error("Unable to add stylesheet "+dbProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                    log.error(e, e);
+                } catch (UnsupportedEncodingException e) {
+                    log.error("Unable to add stylesheet "+dbProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                    log.error(e, e);
+                }
+                // do they want a normalizer applied after the transformation?
+                form=dbProperties.getProperty(name+".normalForm");
+                if(form!=null) try {
+                    normalForm.put(mediaType, Normalizer.Form.valueOf(form));
+                }
+                catch(IllegalArgumentException e) {
+                    log.error("illegal unicode normal form: "+form+", normalizer ignored");
+                    log.error(e, e);
+                }
+                // we should only need this when the transformer
+                // can't run from the default schema
+                recordSchema=dbProperties.getProperty(name+".recordSchema");
+                if(recordSchema!=null && transformers.get(recordSchema)==null) {
+                    recordSchemas.put(mediaType, recordSchema);
+                    if(log.isDebugEnabled())
+                        log.debug("mediaType: "+mediaType+
+                            " requires recordSchema: "+
+                            dbProperties.getProperty(name+".recordSchema"));
+                }
+                contentLocation=dbProperties.getProperty(name+".ContentLocation");
+                if(contentLocation!=null) {
+                    contentLocations.put(mediaType, contentLocation);
+                    if(log.isDebugEnabled())
+                        log.debug("mediaType: "+mediaType+
+                            " ContentLocation: "+contentLocation);
                 }
             }
-
-            String patternStr=dbProperties.getProperty("extractRecordIdFromUriPattern");
-            if(patternStr!=null)
-                extractRecordIdFromUriPatternMatcher=Pattern.compile(patternStr).matcher("");
         }
+
+        String patternStr=dbProperties.getProperty("extractRecordIdFromUriPattern");
+        if(patternStr!=null)
+            extractRecordIdFromUriPatternMatcher=Pattern.compile(patternStr).matcher("");
+        anonymousUpdates=Boolean.valueOf(dbProperties.getProperty("allowAnonymousUpdates"));
         log.debug("Exit: private initDB");
     }
 
+    /**
+     * @return the anonymousUpdates
+     */
+    public boolean isAnonymousUpdates() {
+        return anonymousUpdates;
+    }
 
     public void makeElem(String recStr, RecordType rt, String schemaID, String schemaName, String recordPacking, DocumentBuilder db, Element[] elems) throws IOException, SAXException {
         if (recordPacking.equals("xml")) {
@@ -1420,12 +1488,15 @@ public abstract class SRWDatabase {
             if(lastUpdated==0)
                 sb.append("          <database>");
             else {
+                String iso8601date=ISO8601FORMAT.format(new Date(lastUpdated));
+                String rfc3339date=iso8601date.substring(0, iso8601date.length()-2)+":00";
                 sb.append("          <database lastUpdate=\"")
-                  .append(ISO8601FORMAT.format(new Date(lastUpdated)))
+                  .append(rfc3339date)
                   .append("\" numRecs=\"")
                   .append(getNumberOfDatabaseRecords())
                   .append("\">");
             }
+
             urlStr.append('/');
             String contextPath=request.getContextPath();
             if(contextPath!=null && contextPath.length()>1) {
@@ -1472,17 +1543,14 @@ public abstract class SRWDatabase {
                 elems[i]=new MessageElement((Element)nodes.item(i));
             edt = new ExtraDataType();
             edt.set_any(elems);
-            domDoc=null;
         } catch (IOException e) {
             log.error(e, e);
         } catch (ParserConfigurationException e) {
             log.error(e, e);
         } catch (SAXException e) {
             log.error(e, e);
-            try {
-                log.error("Bad ExtraResponseData:\n" + Utilities.byteArrayToString(
-                    extraData.getBytes("UTF8")));
-            } catch (UnsupportedEncodingException e2) {} // can't happen
+            log.error("Bad ExtraResponseData:\n" + Utilities.byteArrayToString(
+                extraData.getBytes(Charset.forName("UTF-8"))));
         }
         return edt;
     }
@@ -1507,14 +1575,15 @@ public abstract class SRWDatabase {
     /**
      * Look for indexes with context sets and construct a new index entry
      * without the context set.  If the new index is unique, keep it.
+     * @param props
      */
     static protected void makeUnqualifiedIndexes(Properties props) {
-        Enumeration enumer=props.propertyNames();
+        Enumeration<Object> propertyNames = props.keys();
         HashMap<String, String> newIndexes=new HashMap<String, String>();
         int         start;
         String      name, newName, value;
-        while(enumer.hasMoreElements()) {
-            name=(String)enumer.nextElement();
+        while(propertyNames.hasMoreElements()) {
+            name=(String) propertyNames.nextElement();
             if(name.startsWith("qualifier.")) {
                 if((start=name.indexOf('.', 11))>0) {
                     newName="hiddenQualifier."+name.substring(start+1);
@@ -1574,7 +1643,7 @@ public abstract class SRWDatabase {
             ElementParser ep = new ElementParser(extraRequestData);
             log.debug("extraRequestData="+extraRequestData);
             while (ep.hasMoreElements()) {
-                nvp = (NameValuePair) ep.nextElement();
+                nvp = ep.nextElement();
                 extraDataTable.put(nvp.getName(), nvp.getValue());
                 log.debug(nvp);
             }
@@ -1584,6 +1653,17 @@ public abstract class SRWDatabase {
 
     
     public static void putDb(String dbname, SRWDatabase db) {
+//        new Exception("putDB called").printStackTrace();
+        db.response=null;
+        if(db.useCount!=1) {
+            // we'll drop this on the floor and live with the leak rather than
+            // have the possibility of multiple threads using the same database
+            Exception ex = new Exception("returning a database with a useCount other than 1!!  db=" + db);
+            log.error(ex, ex);
+            return;
+        }
+        db.useCount--;
+        db.checkinTime=System.currentTimeMillis();
         LinkedList<SRWDatabase> queue=dbs.get(dbname);
         log.debug("about to synchronize #3 on queue");
         synchronized(queue) {
@@ -1594,13 +1674,13 @@ public abstract class SRWDatabase {
         log.debug("done synchronize #3 on queue");
     }
 
-    public boolean replace(String recordID, byte[] record) {
+    public boolean replace(String recordID, byte[] record, RecordMetadata metadata) {
         throw new UnsupportedOperationException("Not yet implemented");
     }
 
     static public void resetTimer(String resultSetID) {
         QueryResult qr=oldResultSets.get(resultSetID);
-        timers.put(resultSetID, new Long(System.currentTimeMillis() + (qr.getResultSetIdleTime()*1000)));
+        timers.put(resultSetID, System.currentTimeMillis() + (qr.getResultSetIdleTime()*1000));
     }
 
     public void setDefaultResultSetTTL(int defaultResultSetTTL) {
@@ -1674,24 +1754,26 @@ public abstract class SRWDatabase {
     public String toString() {
         StringBuilder sb=new StringBuilder();
         sb.append("Database ").append(dbname).append(" of type ")
-          .append(this.getClass().getName());
+          .append(this.getClass().getName()).append(", useCount=").append(useCount);
         return sb.toString();
     }
 
 
     public Record transform(Record rec, String schemaID) throws SRWDiagnostic {
+        if(log.isDebugEnabled())
+            log.debug("schemaID="+schemaID+", rec.getRecordSchemaID"+rec.getRecordSchemaID());
         if (schemaID!=null && !rec.getRecordSchemaID().equals(schemaID)) {
-            log.debug("transforming to "+schemaID);
+            if(log.isDebugEnabled())
+                log.debug("transforming to "+schemaID);
             // They must have specified a transformer
             Transformer t = transformers.get(schemaID);
             if (t==null) {
                 log.error("can't transform record in schema "+rec.getRecordSchemaID());
+                log.error("record: "+rec);
                 log.error("record not available in schema "+schemaID);
                 log.error("available schemas are:");
-                Enumeration enumer = transformers.keys();
-                while (enumer.hasMoreElements()) {
-                    log.error("    " + (String) enumer.nextElement());
-                }
+                for(String key:transformers.keySet())
+                    log.error("    " + key);
                 throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schemaID);
             }
             String recStr = Utilities.hex07Encode(rec.getRecord());
@@ -1699,8 +1781,10 @@ public abstract class SRWDatabase {
             StreamSource fromRec = new StreamSource(new StringReader(recStr));
             try {
                 t.transform(fromRec, new StreamResult(toRec));
+                t.reset();
             } catch (TransformerException e) {
                 log.error(e, e);
+                t.reset();
                 throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schemaID);
             }
             recStr=toRec.toString();
@@ -1713,12 +1797,12 @@ public abstract class SRWDatabase {
     public void useConfigInfo(String configInfo) {
         if(log.isDebugEnabled()) log.debug("configInfo="+configInfo);
         ElementParser ep = new ElementParser(configInfo);
-        NameValuePair nvp,  configInfoPair = (NameValuePair)ep.nextElement();
+        NameValuePair nvp,  configInfoPair = ep.nextElement();
         String attribute,  attributes,  type;
         StringTokenizer st;
         ep = new ElementParser(configInfoPair.getValue());
         while (ep.hasMoreElements()) {
-            nvp = (NameValuePair) ep.nextElement();
+            nvp = ep.nextElement();
             if (nvp.getName().equals("default")) {
                 attributes=ep.getAttributes();
                 st = new StringTokenizer(attributes, " =\"");
@@ -1746,12 +1830,12 @@ public abstract class SRWDatabase {
 
     public void useSchemaInfo(String schemaInfo) {
         ElementParser ep = new ElementParser(schemaInfo);
-        NameValuePair nvp,  schemaInfoPair = (NameValuePair)ep.nextElement();
+        NameValuePair nvp,  schemaInfoPair = ep.nextElement();
         String attribute,  attributes,  schemaID,  schemaName;
         StringTokenizer st;
         ep = new ElementParser(schemaInfoPair.getValue());
         while (ep.hasMoreElements()) {
-            nvp = (NameValuePair) ep.nextElement();
+            nvp = ep.nextElement();
             if (nvp.getName().equals("schema")) {
                 attributes=ep.getAttributes();
                 log.debug("in useSchemaInfo: attributes="+attributes);

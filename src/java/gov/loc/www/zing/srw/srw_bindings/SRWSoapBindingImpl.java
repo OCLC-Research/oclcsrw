@@ -16,6 +16,9 @@
 
 package gov.loc.www.zing.srw.srw_bindings;
 
+import ORG.oclc.os.SRW.SRWDatabase;
+import ORG.oclc.os.SRW.SRWDiagnostic;
+import ORG.oclc.os.SRW.SRWServlet;
 import ORG.oclc.os.SRW.Utilities;
 import gov.loc.www.zing.cql.xcql.BooleanType;
 import gov.loc.www.zing.cql.xcql.OperandType;
@@ -30,14 +33,10 @@ import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import gov.loc.www.zing.srw.interfaces.SRWPort;
 import java.io.IOException;
-import java.rmi.RemoteException;
-
-import ORG.oclc.os.SRW.SRWDatabase;
-import ORG.oclc.os.SRW.SRWDiagnostic;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.rmi.RemoteException;
 import org.apache.axis.MessageContext;
-import org.apache.axis.types.NonNegativeInteger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.z3950.zing.cql.CQLAndNode;
@@ -57,17 +56,18 @@ public class SRWSoapBindingImpl implements SRWPort {
     static {
         // The method getQualifier() was replaced by getIndex() in version 1.0 of 
         // the parser. This code ensures that either one works.
+        Method m=null;
         try {
-            cqlWorkaroundMethod = CQLTermNode.class.getMethod("getQualifier", new Class[0]);
+            m = CQLTermNode.class.getMethod("getQualifier", new Class<?>[0]);
         }
         catch (SecurityException ex) {
             throw new NoSuchMethodError("getQualifier; SecurityException");
         }
         catch (NoSuchMethodException ex) { /*try renamed method */ }
                         
-        if ( cqlWorkaroundMethod == null) {
+        if ( m == null) {
             try {
-                cqlWorkaroundMethod = CQLTermNode.class.getMethod("getIndex", new Class[0]);
+                m = CQLTermNode.class.getMethod("getIndex", new Class<?>[0]);
             } 
             catch (SecurityException ex) {
                 throw new NoSuchMethodError("getIndex; SecurityException");
@@ -76,24 +76,16 @@ public class SRWSoapBindingImpl implements SRWPort {
                 throw new NoSuchMethodError("getIndex");
             }
         }
+        cqlWorkaroundMethod=m;
     }
 
+    @Override
     public SearchRetrieveResponseType searchRetrieveOperation(
       SearchRetrieveRequestType request) throws RemoteException {
         log.debug("Enter: searchRetrieveOperation");
         long startTime=System.currentTimeMillis();
         MessageContext             msgContext=MessageContext.getCurrentContext();
         SearchRetrieveResponseType response;
-        int resultSetIdleTime=((Integer)msgContext.getProperty("resultSetIdleTime")).intValue();
-        NonNegativeInteger nni=request.getResultSetTTL();
-        if(log.isDebugEnabled())
-            log.debug("resultSetTTL()="+nni);
-        if(nni!=null) {
-            int ttl=nni.intValue();
-            log.debug("ttl="+ttl);
-            if(ttl<resultSetIdleTime)
-                resultSetIdleTime=ttl;
-        }
         String dbname=(String)msgContext.getProperty("dbname");
         SRWDatabase db=(SRWDatabase)msgContext.getProperty("db");
         if(log.isDebugEnabled())
@@ -109,28 +101,29 @@ public class SRWSoapBindingImpl implements SRWPort {
                 request.setQuery(java.net.URLDecoder.decode(query, "utf-8"));
             }
             catch (java.io.UnsupportedEncodingException e) {
+                log.error(query);
+                log.error(e);
             }
-        if(query==null) {
-            response=new SearchRetrieveResponseType();
-            db.diagnostic(SRWDiagnostic.MandatoryParameterNotSupplied,
-                "query", response);
-        }
-        else if(request.getStartRecord()!=null &&
+            catch (IllegalArgumentException e) {
+                log.error(query);
+                log.error(e);
+            }
+        if(request.getStartRecord()!=null &&
           request.getStartRecord().intValue()==Integer.MAX_VALUE) {
             response=new SearchRetrieveResponseType();
-            db.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
+            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
                 "startRecord", response);
         }
         else if(request.getMaximumRecords()!=null &&
           request.getMaximumRecords().intValue()==Integer.MAX_VALUE) {
             response=new SearchRetrieveResponseType();
-            db.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
+            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
                 "maximumRecords", response);
         }
         else if(request.getResultSetTTL()!=null &&
           request.getResultSetTTL().intValue()==Integer.MAX_VALUE) {
             response=new SearchRetrieveResponseType();
-            db.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
+            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
                 "resultSetTTL", response);
         }
         else
@@ -140,22 +133,22 @@ public class SRWSoapBindingImpl implements SRWPort {
                 response=new SearchRetrieveResponseType();
                 response.setVersion("1.1");
                 setEchoedSearchRetrieveRequestType(request, response);
-                db.diagnostic(SRWDiagnostic.GeneralSystemError, null, response);
+                SRWDatabase.diagnostic(SRWDiagnostic.GeneralSystemError, null, response);
                 return response;
             }
             if(msgContext.getProperty("sru")!=null &&
               request.getStylesheet()!=null) // you can't ask for a stylesheet in srw!
-                db.diagnostic(SRWDiagnostic.StylesheetsNotSupported, null, response);
+                SRWDatabase.diagnostic(SRWDiagnostic.StylesheetsNotSupported, null, response);
 
             setEchoedSearchRetrieveRequestType(request, response);
             if(request.getRecordXPath()!=null)
-                db.diagnostic(72, null, response);
+                SRWDatabase.diagnostic(72, null, response);
             if(request.getSortKeys()!=null &&
               !request.getSortKeys().equals("") && !db.supportsSort())
-                db.diagnostic(SRWDiagnostic.SortNotSupported, null, response);
+                SRWDatabase.diagnostic(SRWDiagnostic.SortNotSupported, null, response);
 
             // set extraResponseData
-            StringBuffer extraResponseData = new StringBuffer();
+            StringBuilder extraResponseData = new StringBuilder();
 
             // we're going to stick the database name in extraResponseData every time
             if(db.databaseTitle!=null)
@@ -188,9 +181,6 @@ public class SRWSoapBindingImpl implements SRWPort {
             log.error(e, e);
             throw new RemoteException(e.getMessage(), e);
         }
-        finally {
-            SRWDatabase.putDb(dbname, db);
-        }
 
         response.setVersion("1.1");
         log.info("\""+query+"\"==>"+response.getNumberOfRecords()+" ("+(System.currentTimeMillis()-startTime)+"ms)");
@@ -199,6 +189,7 @@ public class SRWSoapBindingImpl implements SRWPort {
     }
 
 
+    @Override
     public ScanResponseType scanOperation(ScanRequestType request)
       throws java.rmi.RemoteException {
         log.debug("Enter: scanOperation");
@@ -210,33 +201,32 @@ public class SRWSoapBindingImpl implements SRWPort {
             log.debug("db="+db);
         if(request.getScanClause()==null) {
             response=new ScanResponseType();
-            db.diagnostic(SRWDiagnostic.MandatoryParameterNotSupplied,
+            SRWDatabase.diagnostic(SRWDiagnostic.MandatoryParameterNotSupplied,
                 "scanClause", response);
         }
         else if(request.getResponsePosition()!=null &&
           request.getResponsePosition().intValue()==Integer.MAX_VALUE) {
             response=new ScanResponseType();
-            db.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
+            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
                 "responsePosition", response);
         }
         else if(request.getMaximumTerms()!=null &&
           request.getMaximumTerms().intValue()==Integer.MAX_VALUE) {
             response=new ScanResponseType();
-            db.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
+            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue,
                 "maximumTerms", response);
         }
-        else
-            try {
-                response=db.doRequest(request);
+        else try {
+            response=db.doRequest(request);
 
-                // set extraResponseData
-                StringBuffer extraResponseData = new StringBuffer();
+            // set extraResponseData
+            StringBuilder extraResponseData = new StringBuilder();
 
-                // we're going to stick the database name in extraResponseData every time
-                if(db.databaseTitle!=null)
-                    extraResponseData.append("<databaseTitle>").append(db.databaseTitle).append("</databaseTitle>");
-                else
-                    extraResponseData.append("<databaseTitle>").append(dbname).append("</databaseTitle>");
+            // we're going to stick the database name in extraResponseData every time
+            if(db.databaseTitle!=null)
+                extraResponseData.append("<databaseTitle>").append(db.databaseTitle).append("</databaseTitle>");
+            else
+                extraResponseData.append("<databaseTitle>").append(dbname).append("</databaseTitle>");
 
 //                Hashtable extraRequestDataElements=SRWDatabase.parseElements(request.getExtraRequestData());
 //                String s=(String)extraRequestDataElements.get("returnTargetURL");
@@ -255,16 +245,13 @@ public class SRWSoapBindingImpl implements SRWPort {
 //                    }
 //                }
 
-                // set extraResponseData
-                SRWDatabase.setExtraResponseData(response, extraResponseData.toString());
-            }
-            catch(Exception e) {
-                log.error(e, e);
-                throw new RemoteException(e.getMessage(), e);
-            }
-            finally {
-                SRWDatabase.putDb(dbname, db);
-            }
+            // set extraResponseData
+            SRWDatabase.setExtraResponseData(response, extraResponseData.toString());
+        }
+        catch(Exception e) {
+            log.error(e, e);
+            throw new RemoteException(e.getMessage(), e);
+        }
         if(response!=null) {
                 log.info("calling setEchoedScanRequestType");
             setEchoedScanRequestType(request, response);
@@ -347,13 +334,13 @@ public class SRWSoapBindingImpl implements SRWPort {
         ert.setMaximumRecords(request.getMaximumRecords());
         String query=request.getQuery();
         if(query!=null && query.length()>0) {
-            ert.setQuery(query);
+            ert.setQuery(SRWServlet.encode(query));
             try {
                 CQLNode root=cqlparser.parse(query);
                 ert.setXQuery(toOperandType(root));
             }
             catch (CQLParseException e) {
-                log.error("parse problem: \""+query+"\"",e);
+                log.error("parse problem: \""+query+"\"");
                 RelationType rt=new RelationType("", null);
                 SearchClauseType sct=new SearchClauseType("", rt, "");
                 OperandType ot=new OperandType();
@@ -419,7 +406,7 @@ public class SRWSoapBindingImpl implements SRWPort {
             RelationType rt=new RelationType();
             rt.setValue(ctn.getRelation().getBase());
             sct.setRelation(rt);
-            sct.setTerm(ctn.getTerm());
+            sct.setTerm(SRWServlet.encode(ctn.getTerm()));
             ot.setSearchClause(sct);
         }
         else {

@@ -27,6 +27,7 @@ import gov.loc.www.zing.srw.TermType;
 import gov.loc.www.zing.srw.TermTypeWhereInList;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,6 +58,22 @@ public class SRWFileSystemDatabase extends SRWDatabase {
     String schemaID, schemaLocation, schemaName;
 
     @Override
+    public String add(byte[] record, RecordMetadata metadata) {
+        try { // the filename comes in through the comment
+            FileOutputStream fos = new FileOutputStream(new File(directory, metadata.getComment()));
+            fos.write(record);
+            fos.close();
+        } catch (Exception ex) {
+            log.error(ex, ex);
+            return null;
+        }
+        filenames.add(metadata.getComment());
+        Collections.sort(filenames);
+        return metadata.getComment();
+    }
+
+
+    @Override
     public void addRenderer(String schemaName, String schemaID, Properties props)
       throws InstantiationException {
     }
@@ -79,6 +96,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         return sb.toString();
     }
 
+    @Override
     public String getExtraResponseData(QueryResult result,
       SearchRetrieveRequestType request) {
         return null;
@@ -97,6 +115,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         Collections.sort(filenames);
     }
 
+    @Override
     public String getIndexInfo() {
         StringBuilder sb=new StringBuilder();
         sb.append("        <indexInfo>\n")
@@ -128,6 +147,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         return defaultNumRecs;
     }
 
+    @Override
     public QueryResult getQueryResult(String queryStr,
       SearchRetrieveRequestType request) {
         BasicQueryResult result=new BasicQueryResult();
@@ -192,6 +212,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         return sb.toString();
     }
 
+    @Override
     public TermList getTermList(CQLTermNode term, int position, int maxTerms, ScanRequestType request) {
         String index=term.getIndex();
         TermList termList=new TermList();
@@ -227,6 +248,7 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         return true;
     }
 
+    @Override
     public void init(String dbname, String srwHome, String dbHome,
       String dbPropertiesFileName, Properties dbProperties, HttpServletRequest request) {
         log.debug("entering SRWFileSystemDatabase.init, dbname="+dbname);
@@ -247,9 +269,9 @@ public class SRWFileSystemDatabase extends SRWDatabase {
         parser=new CQLParser(CQLParser.V1POINT1);
         getFilenames();
         log.debug("leaving SRWFileSystemDatabase.init");
-        return;
     }
 
+    @Override
     public boolean supportsSort() {
         return false;
     }
@@ -262,6 +284,7 @@ class DirFilter implements FilenameFilter {
     pattern = Pattern.compile(regex);
   }
 
+    @Override
   public boolean accept(File dir, String name) {
     // Strip path information, search for regex:
     return pattern.matcher(new File(name).getName()).matches();

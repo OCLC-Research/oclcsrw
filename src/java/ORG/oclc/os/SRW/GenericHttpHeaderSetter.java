@@ -19,46 +19,93 @@ import org.apache.commons.logging.LogFactory;
  */
 public class GenericHttpHeaderSetter implements HttpHeaderSetter {
     private static Log log=LogFactory.getLog(GenericHttpHeaderSetter.class);
+    private boolean checkEveryRecord=false;
 
+    @Override
     public void init(Properties props) {
+        String str=props.getProperty("GenericHttpHeaderSetter.checkEveryRecord");
+        if(str!=null && "true".equals(str.toLowerCase()))
+            checkEveryRecord=true;
+        if(log.isDebugEnabled()) {
+            log.debug("checkEveryRecord="+checkEveryRecord);
+        }
     }
 
-    public void setGetResponseHeaders(SearchRetrieveRequestType searchRequest, SearchRetrieveResponseType searchResponse, String soapResponse, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+    @Override
+    public int setGetResponseHeaders(SearchRetrieveRequestType searchRequest,
+      SearchRetrieveResponseType searchResponse, String soapResponse,
+      HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
         int status=-1;
+        String extraStuff=httpRequest.getParameter("extraStuff");
         String location=(String)httpRequest.getAttribute("Location");
         String statusStr=(String)httpRequest.getAttribute("status");
         if(statusStr!=null)
             status=Integer.parseInt(statusStr);
-        if(status>=0) {
-            log.info("Location="+location);
-            log.info("status="+status);
+        if(extraStuff!=null && extraStuff.startsWith("\""))
+            extraStuff=extraStuff.substring(1);
+        if(extraStuff!=null && extraStuff.startsWith("/"))
+            extraStuff=extraStuff.substring(1);
+        if(extraStuff!=null && extraStuff.endsWith("\""))
+            extraStuff=extraStuff.substring(0, extraStuff.length()-1);
+        if(log.isDebugEnabled()) {
+            log.debug("Location="+location);
+            log.debug("status="+status);
+            log.debug("extraStuff="+extraStuff);
+        }
+        if(status>=0 || checkEveryRecord) {
+            if(log.isDebugEnabled())
+                log.debug("soapResponse="+soapResponse);
+            if(status==-1) { // look for status in response
+                int start=soapResponse.indexOf("status>");
+                if(start>0) {
+                    start+=7;
+                    int end=soapResponse.indexOf("</", start);
+                    status=Integer.parseInt(soapResponse.substring(start, end));
+                    if(log.isDebugEnabled()) {
+                        log.debug("status="+status);
+                    }
+                }
+                if(status==-1)
+                    return -1;
+            }
             httpResponse.setStatus(status);
             if(status>=300 && status<400 && location==null) {
                 // redirect without location?  better be in the soapResponse!
-                System.out.println(soapResponse);
-                int start=soapResponse.indexOf("<location>");
+//                System.out.println(soapResponse);
+                int start=soapResponse.indexOf("location>");
                 if(start>0) {
-                    start+=10;
-                    int end=soapResponse.indexOf("</location>", start);
+                    start+=9;
+                    while(Character.isWhitespace(soapResponse.charAt(start)))
+                        start++;
+                    int end=soapResponse.indexOf("</", start);
                     location=soapResponse.substring(start, end);
-                    log.info("location="+location);
+                    if(extraStuff!=null && extraStuff.length()>0) {
+                        if(location.endsWith("/"))
+                            location=location+extraStuff;
+                        else
+                            location=location+"/"+extraStuff;
+                    }
+                    if(log.isDebugEnabled()) {
+                        log.debug("Location="+location);
+                    }
                 }
             }
         }
         if(location!=null)
             httpResponse.setHeader("Location", location);
+        return status;
     }
 
+    @Override
     public void setDeleteResponseHeaders(String record, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        throw new UnsupportedOperationException("Not supported yet.");
     }
 
+    @Override
     public void setPostResponseHeaders(String record, HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
-        throw new UnsupportedOperationException("Not supported yet.");
     }
 
+    @Override
     public void setPutResponseHeaders(String record, HttpServletRequest request, HttpServletResponse response) {
-        throw new UnsupportedOperationException("Not supported yet.");
     }
 
 }

@@ -199,7 +199,22 @@ public class SearchRetrieveResponseType  extends gov.loc.www.zing.srw.ResponseTy
         this.extraResponseData = extraResponseData;
     }
 
+    @Override
+    public String toString() {
+        StringBuilder sb=new StringBuilder("SearchRetrieveResponseType: ");
+        sb.append("numberOfRecords=").append(numberOfRecords.intValue());
+        sb.append("resultSetId=").append(resultSetId);
+        sb.append("resultSetIdleTime=").append(resultSetIdleTime.intValue());
+        sb.append("records=").append(records);
+        sb.append("nextRecordPosition=").append(nextRecordPosition.intValue());
+        sb.append("echoedSearchRetrieveRequest=").append(echoedSearchRetrieveRequest);
+        sb.append("diagnostics=").append(diagnostics);
+        sb.append("extraResponseData=").append(extraResponseData);
+        return sb.toString();
+    }
+
     private java.lang.Object __equalsCalc = null;
+    @Override
     public synchronized boolean equals(java.lang.Object obj) {
         if (!(obj instanceof SearchRetrieveResponseType)) return false;
         SearchRetrieveResponseType other = (SearchRetrieveResponseType) obj;
@@ -240,6 +255,7 @@ public class SearchRetrieveResponseType  extends gov.loc.www.zing.srw.ResponseTy
     }
 
     private boolean __hashCodeCalc = false;
+    @Override
     public synchronized int hashCode() {
         if (__hashCodeCalc) {
             return 0;

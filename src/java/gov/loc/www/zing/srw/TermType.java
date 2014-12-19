@@ -7,7 +7,7 @@
 
 package gov.loc.www.zing.srw;
 
-public class TermType  implements Comparable, java.io.Serializable {
+public class TermType  implements Comparable<TermType>, java.io.Serializable {
     private java.lang.String value;
     private org.apache.axis.types.NonNegativeInteger numberOfRecords;
     private java.lang.String displayTerm;
@@ -267,7 +267,7 @@ public class TermType  implements Comparable, java.io.Serializable {
         return value;
     }
 
-    public int compareTo(Object o) {
-        return value.compareTo(((TermType)o).getValue());
+    public int compareTo(TermType o) {
+        return value.compareTo(o.getValue());
     }
 }

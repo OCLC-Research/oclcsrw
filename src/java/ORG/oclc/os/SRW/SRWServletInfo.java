@@ -21,14 +21,18 @@
 
 package ORG.oclc.os.SRW;
 
+import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.InputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.net.URL;
+import java.nio.charset.Charset;
+import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -36,9 +40,11 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.StringTokenizer;
+import javax.servlet.ServletConfig;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.ServletConfig;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
 import org.apache.axis.Message;
 import org.apache.axis.MessageContext;
 import org.apache.commons.logging.Log;
@@ -52,18 +58,25 @@ public class SRWServletInfo {
     public static final boolean isDebug=false;
     public static Log log=LogFactory.getLog(SRWServletInfo.class);
     public static HashMap<String, String> realXsls=new HashMap<String, String>();
+    public HashMap<String, Normalizer.Form> normalForm=new HashMap<String, Normalizer.Form>();
+    public HashMap<String, String> mediaTypes=new HashMap<String, String>();
+    public HashMap<String, Transformer> transformers=new HashMap<String, Transformer>();
     public static String srwHome, tomcatHome, webappHome;
+    protected HashMap<String, String>
+                          nameSpaces=new HashMap<String, String>(),
+                          schemas=new HashMap<String, String>();
 
     static private boolean madeIndexDotHtmlAlready=false;
 
     private boolean      makeIndexDotHtml=false;
-    private HashMap<String, String> extensions=new HashMap<String, String>(), namespaces=new HashMap<String, String>();
+    private final HashMap<String, String> extensions=new HashMap<String, String>(), namespaces=new HashMap<String, String>();
     public  HashMap<String, String> dbnames=new HashMap<String, String>();
-    public int           pathInfoIndex=100, resultSetIdleTime=300; // time in seconds
-    private Properties   properties=new Properties();
-    public String        databaseURL, defaultDatabase, indexDotHtmlLocation=null,
-                         propsfileName;
-    public ArrayList<DbEntry> dbVector=new ArrayList<DbEntry>();
+    public int           pathInfoIndex=100;
+    private final Properties   serverProperties=new Properties();
+    public String        addressInHeader=null, defaultDatabase,
+                         indexDotHtmlLocation=null, propsfileName;
+    public ArrayList<DbEntry> dbList=new ArrayList<DbEntry>();
+    public ContentTypeNegotiator conneg;
 
     public SRWServletInfo() {
     }
@@ -92,12 +105,12 @@ public class SRWServletInfo {
         }
     }
     
-    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbVector, HashMap<String, String> dbnames, String path) {
-        buildDbList(properties, dbVector, dbnames, path, null);
+    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbList, HashMap<String, String> dbnames, String path, boolean justDbNames) {
+        buildDbList(properties, dbList, dbnames, path, null, justDbNames);
     }
 
-    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbVector, HashMap<String, String> dbnames, String path, String remote) {
-        Enumeration enumer=properties.propertyNames();
+    private static void buildDbList(Properties properties, ArrayList<DbEntry> dbList, HashMap<String, String> dbnames, String path, String remote, boolean justDbNames) {
+        Enumeration<?> enumer=properties.propertyNames();
         String      fileName, dbHome, dbName, description, hidden=null, t;
         while(enumer.hasMoreElements()) {
             t=(String)enumer.nextElement();
@@ -106,7 +119,7 @@ public class SRWServletInfo {
                 if(remote==null)
                     hidden=properties.getProperty("db."+dbName+".hidden");
                 description=properties.getProperty("db."+dbName+".description");
-                if(description==null  && remote==null) { // see if it is in the database props
+                if(description==null  && remote==null && !justDbNames) { // see if it is in the database props
                     dbHome=properties.getProperty("db."+dbName+".home");
                     fileName=properties.getProperty(
                         "db."+dbName+".configuration");
@@ -123,26 +136,26 @@ public class SRWServletInfo {
                             if(remote==null)
                                 log.error(e);
                         }
-                        catch(Exception e) {
+                        catch(IOException e) {
                             if(remote==null)
                                 log.error(e, e);
                         }
                 }
                 if(remote!=null || hidden==null || !hidden.equalsIgnoreCase("true")) {
-                    dbVector.add(new DbEntry(dbName, remote, path, description));
+                    if(!justDbNames)
+                        dbList.add(new DbEntry(dbName, remote, path, description));
                     dbnames.put(dbName, dbName);
                 }
             }
             else if(remote==null && t.startsWith("remote.") && t.endsWith(".configuration")) {
                 remote=t.substring(7, t.length()-14);
                 try {
-                    fileName=properties.getProperty(t);
                     String remotePath=properties.getProperty("remote."+remote+".path");
                     InputStream is=new URL(properties.getProperty(t)).openStream();
                     Properties srwProperties=new Properties();
                     srwProperties.load(is);
                     is.close();
-                    buildDbList(srwProperties, dbVector, dbnames, remotePath, remote);
+                    buildDbList(srwProperties, dbList, dbnames, remotePath, remote, justDbNames);
                 }
                 catch(IOException e) {
                     log.error(e);
@@ -159,11 +172,11 @@ public class SRWServletInfo {
         StringTokenizer st=new StringTokenizer(list, ", ");
         while(st.hasMoreTokens()) {
             dbname=st.nextToken();
-            SRWDatabase.createDB(dbname, properties);
+            SRWDatabase.createDB(dbname, serverProperties);
         }
     }
 
-    public static String findRealXsl(String languages, Enumeration locales, String xsl) {
+    public static String findRealXsl(String languages, Enumeration<Locale> locales, String xsl) {
         log.debug("looking for stylesheet: "+xsl+" in languages: "+languages);
         File   f;
         Locale l;
@@ -176,7 +189,7 @@ public class SRWServletInfo {
             suffix=xsl.substring(off);
         }
         while(locales.hasMoreElements()) {
-            l=(Locale)locales.nextElement();
+            l=locales.nextElement();
             log.debug("looking for "+xsl+" in "+webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             f=new File(webappHome+"/"+base+"_"+l.getLanguage()+"_"+l.getCountry()+suffix);
             if(f.exists()) {
@@ -214,7 +227,7 @@ public class SRWServletInfo {
     }
 
     public String getDBName(final HttpServletRequest request) {
-        String dbname=defaultDatabase, path=(String)request.getPathInfo();
+        String dbname=defaultDatabase, path=request.getPathInfo();
         StringTokenizer st;
         log.info("pathInfo="+path);
         if(path!=null && path.indexOf('/')>=0) {
@@ -232,19 +245,20 @@ public class SRWServletInfo {
     }
 
     public String getExtension(String sruParm) {
-        return (String)extensions.get(sruParm);
+        return extensions.get(sruParm);
     }
 
     public String getNamespace(String sruParm) {
-        return (String)namespaces.get(sruParm);
+        return namespaces.get(sruParm);
     }
 
     public Properties getProperties() {
-        return properties;
+        return serverProperties;
     }
 
-    public StringBuilder getXmlHeaders(final HttpServletRequest req, final String defaultXsl) {
-        StringBuilder sb=new StringBuilder("<?xml version=\"1.0\" ?> \n");
+    @SuppressWarnings("unchecked")
+    public StringBuffer getXmlHeaders(final HttpServletRequest req, final String defaultXsl) {
+        StringBuffer sb=new StringBuffer("<?xml version=\"1.0\"  encoding=\"UTF-8\"?> \n");
         String xsl=req.getParameter("xsl"); // version 1.0
         if(xsl==null)
             xsl=req.getParameter("stylesheet"); // version 1.1
@@ -252,7 +266,7 @@ public class SRWServletInfo {
             xsl=defaultXsl;
         if(xsl!=null) {
             String languages=req.getHeader("Accept-Language");
-            String realXsl=(String)realXsls.get(languages+'/'+xsl);
+            String realXsl=realXsls.get(languages+'/'+xsl);
             if(realXsl==null)
                 xsl=findRealXsl(languages, req.getLocales(), xsl);
             else
@@ -270,7 +284,7 @@ public class SRWServletInfo {
                recordPacking=request.getParameter("recordPacking"),
                stylesheet=request.getParameter("stylesheet");
         log.info("Got an explain request for database "+dbname);
-        SRWDatabase db=SRWDatabase.getDB(dbname, properties, request.getContextPath(), request);
+        SRWDatabase db=SRWDatabase.getDB(dbname, serverProperties, request.getContextPath(), request);
         if(db==null) {
             log.error("Non-existant database "+dbname+" in properties file \""+propsfileName+"\"");
             response.setStatus(404);
@@ -304,7 +318,7 @@ public class SRWServletInfo {
             writer.write("    </SRW:record>\n");
             writer.write("  </SRW:explainResponse>\n");
         }
-        catch(Exception e) {
+        catch(IOException e) {
             log.error(e, e);
         }
         writer.close();
@@ -344,51 +358,48 @@ public class SRWServletInfo {
             InputStream is;
             try {
                 is=Utilities.openInputStream(propsfileName, srwHome, null);
-                properties.load(is);
+                serverProperties.load(is);
                 is.close();
-                addMoreProperties(properties, propsfileName, srwHome);
+                addMoreProperties(serverProperties, propsfileName, srwHome);
             }
             catch(java.io.FileNotFoundException e) {
                 log.info("Unable to load properties file: "+propsfileName);
                 log.info("Will using web.xml for configuration parameters");
-                Enumeration enumer=config.getInitParameterNames();
+                Enumeration<?> enumer = config.getInitParameterNames();
                 String propName;
                 while(enumer.hasMoreElements()) {
                     propName=(String)enumer.nextElement();
-                    properties.setProperty(propName, config.getInitParameter(propName));
+                    serverProperties.setProperty(propName, config.getInitParameter(propName));
                 }
             }
-            buildDbList(properties, dbVector, dbnames, config.getServletContext().getRealPath("/"));
-            srwHome=properties.getProperty("SRW.Home");
+            buildDbList(serverProperties, dbList, dbnames, config.getServletContext().getRealPath("/"), true);
+            srwHome=serverProperties.getProperty("SRW.Home");
             if(srwHome==null) {
                 srwHome=config.getServletContext().getRealPath("/");
             }
             log.info("SRW.Home="+srwHome);
-            pathInfoIndex=Integer.parseInt(
-              properties.getProperty("pathInfoIndex",
+            pathInfoIndex=Integer.parseInt(serverProperties.getProperty("pathInfoIndex",
               Integer.toString(pathInfoIndex)));
             log.info("pathInfoIndex="+pathInfoIndex);
-            resultSetIdleTime=Integer.parseInt(
-              properties.getProperty("resultSetIdleTime",
-              Integer.toString(resultSetIdleTime)));
-            log.info("resultSetIdleTime="+resultSetIdleTime+" seconds");
-            defaultDatabase=properties.getProperty("default.database");
+            defaultDatabase=serverProperties.getProperty("default.database");
             if(defaultDatabase==null)
                 defaultDatabase=
                     "default.database not specified in properties file";
             log.info("default.database="+defaultDatabase);
-            indexDotHtmlLocation=properties.getProperty("index.html");
+            indexDotHtmlLocation=serverProperties.getProperty("index.html");
             if(indexDotHtmlLocation==null)
                 indexDotHtmlLocation=srwHome+"index.html";
-            String s=properties.getProperty("makeIndex.html");
+            String s=serverProperties.getProperty("makeIndex.html");
             if(s!=null)
                 if(s.equalsIgnoreCase("true"))
                     makeIndexDotHtml=true;
+            addressInHeader=serverProperties.getProperty("addressInHeader");
+            log.info("addressInHeader=\""+addressInHeader+'"');
 
             // any dbs to open automatically?
-            s=properties.getProperty("SRW.OpenAllDatabasesOnStartup");
+            s=serverProperties.getProperty("SRW.OpenAllDatabasesOnStartup");
             if(s==null) { // maybe a short list to open?
-                s=properties.getProperty("SRW.OpenDatabasesInListOnStartup");
+                s=serverProperties.getProperty("SRW.OpenDatabasesInListOnStartup");
                 if(s!=null) {
                     log.info("Opening databases: "+s);
                     createDBs(s);
@@ -399,7 +410,7 @@ public class SRWServletInfo {
             else
                 if(s.equalsIgnoreCase("true") || s.equalsIgnoreCase("t") ||
                   s.equals("1")) {
-                    Enumeration enumer=properties.propertyNames();
+                    Enumeration<?> enumer=serverProperties.propertyNames();
                     int         offset;
                     String      dbname, list=",", t;
                     while(enumer.hasMoreElements()) {
@@ -415,26 +426,91 @@ public class SRWServletInfo {
                     log.info("Opening all databases :"+list);
                     createDBs(list);
                 }
-
             // load the sru-srw extension mapping table
-            Enumeration enumer=properties.propertyNames();
+            Enumeration<?> enumer = serverProperties.propertyNames();
             String      extension, namespace, sruParm, t;
             while(enumer.hasMoreElements()) {
                 t=(String)enumer.nextElement();
                 if(t.startsWith("extension.") && !t.endsWith(".namespace")) {
                     sruParm=t.substring(10);
-                    extension=properties.getProperty(t);
+                    extension=serverProperties.getProperty(t);
                     extensions.put(sruParm, extension);
                     log.debug("added extension="+extension+", with sru parm="+sruParm);
-                    namespace=properties.getProperty("extension."+extension+".namespace");
+                    namespace=serverProperties.getProperty("extension."+extension+".namespace");
                     namespaces.put(sruParm, namespace);
                     log.debug("added namespace="+namespace+", with sru parm="+sruParm);
                 }
             }
 
+            // content negotiation for SRU responses?
+            conneg=new ContentTypeNegotiator();
+            log.debug("conneg="+conneg);
+            boolean foundHtml=false;
+            Enumeration<Object> propertyNames = serverProperties.keys();
+            int offset;
+            String key, mediaType, mimeType, name, form, value;
+            StringTokenizer st;
+            ContentTypeNegotiator.VariantSpec vs;
+            while(propertyNames.hasMoreElements()) {
+                key=(String) propertyNames.nextElement();
+                offset=key.indexOf("mimeTypes");
+                if(offset>0) {
+                    name=key.substring(0, offset-1);
+                    value=serverProperties.getProperty(key);
+                    log.info(key+"="+value);
+                    st=new StringTokenizer(value, ", ");
+                    mimeType=st.nextToken();
+                    vs=conneg.addVariant(mimeType);
+                    mediaType=vs.getMediaType().getMediaType();
+                    try {
+                        Transformer trans = Utilities.addTransformer(mediaType,
+                                serverProperties.getProperty(name+".styleSheet"),
+                                srwHome, null, null, serverProperties, propsfileName);
+                        if(trans!=null) {
+                            transformers.put(mediaType, trans);
+                        }
+                        while(st.hasMoreTokens())
+                            vs.addAliasMediaType(st.nextToken());
+                    } catch (FileNotFoundException e) {
+                        log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                        log.error(e, e);
+                    } catch (TransformerConfigurationException e) {
+                        log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                        log.error(e, e);
+                    } catch (UnsupportedEncodingException e) {
+                        log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
+                        log.error(e, e);
+                    }
+                    if(mediaType.contains("html")) {
+                        foundHtml=true;
+                        while(st.hasMoreTokens())
+                            vs.addAliasMediaType(st.nextToken());
+                    }
+                    // do they want a normalizer applied after the transformation?
+                    form=serverProperties.getProperty(name+".normalForm");
+                    if(form!=null) try {
+                        normalForm.put(mediaType, Normalizer.Form.valueOf(form));
+                    }
+                    catch(IllegalArgumentException e) {
+                        log.error("illegal unicode normal form: "+form+", normalizer ignored");
+                        log.error(e, e);
+                    }
+                }
+            }
+            if(!foundHtml) { // let's add minimal support for html, even if they forgot
+                st=new StringTokenizer("text/html;q=0.9, application/xhtml+xml", ", ");
+                mimeType=st.nextToken();
+                vs=conneg.addVariant(mimeType);
+                while(st.hasMoreTokens())
+                    vs.addAliasMediaType(st.nextToken());
+            }
             log.info("SRWServletInfo initialization complete");
         }
-        catch(Exception e) {
+        catch(IOException e) {
+            log.error(e, e);
+        } catch (NumberFormatException e) {
+            log.error(e, e);
+        } catch (InstantiationException e) {
             log.error(e, e);
         }
     }
@@ -478,13 +554,13 @@ public class SRWServletInfo {
             ps.println("</table>");
             ps.println("</div>");
             ps.println("<table class=\"formtable\">");
-            if(dbVector.isEmpty())
-                buildDbList(properties, dbVector, dbnames, path);
-            Object[] dbList=dbVector.toArray();
-            Arrays.sort(dbList);
+            if(dbList.isEmpty())
+                buildDbList(properties, dbList, dbnames, path, false);
+            Object[] dbArray=this.dbList.toArray();
+            Arrays.sort(dbArray);
             DbEntry de;
-            for(int i=0; i<dbList.length; i++) {
-                de=(DbEntry)dbList[i];
+            for (Object dbArray1 : dbArray) {
+                de = (DbEntry) dbArray1;
                 ps.print("<tr><th><a href=\""+de.getPath()+"/"+de.getName()+"\">");
                 if(de.getHost().length()>0)
                     ps.print(de.getHost()+": ");
@@ -501,7 +577,7 @@ public class SRWServletInfo {
             ps.println("</html>");
             ps.close();
         }
-        catch(IOException e){
+        catch(FileNotFoundException e){
             log.error(e,e);
         }
     }
@@ -510,7 +586,7 @@ public class SRWServletInfo {
       final HttpServletResponse response, final MessageContext msgContext) 
       throws org.apache.axis.AxisFault {
         log.debug("entering SRWServletInfo.setSRWStuff");
-        databaseURL=request.getRequestURL().toString();
+        String databaseURL=request.getRequestURL().toString();
         String contextPath=request.getContextPath(), dbname=getDBName(request);
 
         if(contextPath.length()>1)
@@ -518,7 +594,7 @@ public class SRWServletInfo {
         if(log.isDebugEnabled())
             log.debug("contextPath="+contextPath);
 
-        SRWDatabase db=SRWDatabase.getDB(dbname, properties, contextPath, request);
+        SRWDatabase db=SRWDatabase.getDB(dbname, serverProperties, contextPath, request);
         if(db==null) {
             log.error("Non-existant database "+dbname);
             log.error("requesting url was: "+request.getRequestURL().toString());
@@ -527,13 +603,11 @@ public class SRWServletInfo {
         }
         db.getExplainRecord(request);
         if(makeIndexDotHtml && !madeIndexDotHtmlAlready)
-            makeIndexDotHtml(properties, request);
+            makeIndexDotHtml(serverProperties, request);
         
         msgContext.setProperty("dbname", dbname);
         msgContext.setProperty("db", db);
         msgContext.setProperty("databaseURL", databaseURL);
-        msgContext.setProperty("resultSetIdleTime",
-            new Integer(resultSetIdleTime));
         Message m=msgContext.getCurrentMessage();
         String msg=null;
         if(m!=null) {
@@ -542,7 +616,7 @@ public class SRWServletInfo {
             msg=msg.substring(i+5, i+35);
         }
 //        log.info("msg part='"+msg+"'");
-        if(msg!=null && msg.indexOf("explainRequest")>=0) {
+        if(msg!=null && msg.contains("explainRequest")) {
 //            log.info("set service to ExplainSoap");
             msgContext.setTargetService("ExplainSOAP");
         }
@@ -565,8 +639,8 @@ public class SRWServletInfo {
       final MessageContext msgContext, final HttpServletRequest req,
       final String defaultXsl) {
         try {
-            sos.write(getXmlHeaders(req, defaultXsl).toString().getBytes("utf-8"));
+            sos.write(getXmlHeaders(req, defaultXsl).toString().getBytes(Charset.forName("UTF-8")));
         }
-        catch(Exception e){}
+        catch(IOException e){}
     }
 }

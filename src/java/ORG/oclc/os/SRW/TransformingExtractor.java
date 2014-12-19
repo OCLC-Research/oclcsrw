@@ -81,8 +81,10 @@ public class TransformingExtractor implements SortElementExtractor {
         StreamSource streamXMLRecord=new StreamSource(recordReader);
         try {
             extractor.transform(streamXMLRecord, new StreamResult(xmlRecordWriter));
+            extractor.reset();
         }
         catch(TransformerException e) {
+            extractor.reset();
             throw new SortElementExtractorException(e);
         }
         return xmlRecordWriter.toString();

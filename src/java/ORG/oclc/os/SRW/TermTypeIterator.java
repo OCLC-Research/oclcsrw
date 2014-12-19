@@ -20,6 +20,7 @@
 
 package ORG.oclc.os.SRW;
 
+import gov.loc.www.zing.srw.ScanRequestType;
 import gov.loc.www.zing.srw.ScanResponseType;
 import gov.loc.www.zing.srw.TermType;
 import gov.loc.www.zing.srw.TermTypeWhereInList;
@@ -31,16 +32,20 @@ import java.net.URLEncoder;
 import java.text.ParseException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import javax.servlet.ServletException;
 import org.apache.axis.types.NonNegativeInteger;
+import org.apache.axis.types.PositiveInteger;
 
 /**
  *
  * @author levan
  */
-public class TermTypeIterator implements Iterator {
+public class TermTypeIterator implements Iterator<TermType> {
     static final int NumScanTerms=500;
     boolean    calledHasNext=false, decreasing;
     int        pos;
+    ScanRequestType srt;
+    SRWDatabase db;
     String     baseURL, index, relation;
     TermType[] terms;
 
@@ -74,6 +79,25 @@ public class TermTypeIterator implements Iterator {
         terms[0]=new TermType(term, new NonNegativeInteger("0"), term, null, null);
     }
 
+    public TermTypeIterator(SRWDatabase db, String index, String relation, String term, boolean decreasing) throws ParseException, IOException {
+        this.decreasing=decreasing;
+        this.db=db;
+        this.index=index;
+        this.relation=relation;
+        srt=new ScanRequestType("", new NonNegativeInteger("1"), new PositiveInteger(Integer.toString(NumScanTerms)), null, null);
+        if(decreasing) {
+            srt.setScanClause("\uffff");
+            srt.setResponsePosition(new NonNegativeInteger(Integer.toString(NumScanTerms+1)));
+            pos=-1;
+        }
+        else {
+            pos=1;
+        }
+        terms=new TermType[1];
+        terms[0]=new TermType(term, new NonNegativeInteger("0"), term, null, null);
+    }
+
+    @Override
     public boolean hasNext() {
         calledHasNext=true;
         if(decreasing) {
@@ -81,10 +105,15 @@ public class TermTypeIterator implements Iterator {
                 String seed=terms[0].getValue();
                 pos=NumScanTerms;
                 try {
-                    terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
-                      baseURL+"&scanClause="+index+"%20"+relation+"%20%22"+URLEncoder.encode(seed, "UTF-8")+
+                    if(baseURL!=null)
+                        terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
+                            baseURL+"&scanClause="+index+"%20"+relation+"%20%22"+URLEncoder.encode(seed, "UTF-8")+
                               "%22&responsePosition="+(NumScanTerms+1)+
-                              "&maximumTerms="+NumScanTerms))).getTerms().getTerm();
+                              "&maximumTerms="+NumScanTerms, false, true))).getTerms().getTerm();
+                    else {
+                        srt.setScanClause(index+" "+relation+" \""+seed+"\"");
+                        terms=db.doRequest(srt).getTerms().getTerm();
+                    }
                 }
                 catch(ParseException e) {
                     throw new NoSuchElementException(e.getMessage());
@@ -92,6 +121,9 @@ public class TermTypeIterator implements Iterator {
                 catch(UnsupportedEncodingException e) {
                 }
                 catch(IOException e) {
+                    throw new NoSuchElementException(e.getMessage());
+                }
+                catch(ServletException e) {
                     throw new NoSuchElementException(e.getMessage());
                 }
                 if(terms==null)
@@ -125,10 +157,15 @@ public class TermTypeIterator implements Iterator {
 //                System.out.println("url: "+baseURL+"&scanClause="+index+"+"+relation+"+%22"+URLEncoder.encode(seed, "UTF-8")+
 //                          "%22&responsePosition=1"+
 //                          "&maximumTerms="+NumScanTerms);
-                terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
-                  baseURL+"&scanClause="+index+"+"+relation+"+%22"+URLEncoder.encode(seed, "UTF-8")+
-                          "%22&responsePosition=1"+
-                          "&maximumTerms="+NumScanTerms))).getTerms().getTerm();
+                if(baseURL!=null)
+                    terms=((ScanResponseType)Utilities.xmlToObj(Utilities.readURL(
+                        baseURL+"&scanClause="+index+"+"+relation+"+%22"+URLEncoder.encode(seed, "UTF-8")+
+                                "%22&responsePosition=1"+
+                                "&maximumTerms="+NumScanTerms, false, true))).getTerms().getTerm();
+                else {
+                    srt.setScanClause(index+" "+relation+" \""+seed+"\"");
+                    terms=db.doRequest(srt).getTerms().getTerm();
+                }
 //                System.out.println("first returned term is "+terms[0].getValue());
             }
             catch(ParseException e) {
@@ -136,6 +173,9 @@ public class TermTypeIterator implements Iterator {
             }
             catch(UnsupportedEncodingException e){}
             catch(IOException e) {
+                throw new NoSuchElementException(e.getMessage());
+            }
+            catch(ServletException e) {
                 throw new NoSuchElementException(e.getMessage());
             }
             if(terms==null) {
@@ -161,7 +201,7 @@ public class TermTypeIterator implements Iterator {
         return true;
     }
 
-    public Object next() throws NoSuchElementException {
+    public TermType next() throws NoSuchElementException {
         if(!calledHasNext)
             if(!hasNext())
                 throw new NoSuchElementException();

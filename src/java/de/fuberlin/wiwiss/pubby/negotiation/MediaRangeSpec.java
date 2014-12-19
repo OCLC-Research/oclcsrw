@@ -61,13 +61,11 @@ public class MediaRangeSpec {
 		if ("*".equals(type) && !"*".equals(subtype)) {
 			return null;
 		}
-		List parameterNames = new ArrayList();
-		List parameterValues = new ArrayList();
+		List<String> parameterNames = new ArrayList<String>();
+		List<String> parameterValues = new ArrayList<String>();
 		while (m.find()) {
-			String name = m.group(1).toLowerCase();
-			String value = (m.group(3) == null) ? m.group(2) : unescape(m.group(3));
-			parameterNames.add(name);
-			parameterValues.add(value);
+			parameterNames.add(m.group(1).toLowerCase());
+			parameterValues.add((m.group(3) == null) ? m.group(2) : unescape(m.group(3)));
 		}
 		double quality = 1.0;		
 		if (qValue != null && qValuePattern.matcher(qValue).matches()) {
@@ -84,8 +82,8 @@ public class MediaRangeSpec {
 	 * Parses an HTTP Accept header into a List of MediaRangeSpecs
 	 * @return A List of MediaRangeSpecs 
 	 */
-	public static List parseAccept(String s) {
-		List result = new ArrayList();
+	public static List<MediaRangeSpec> parseAccept(String s) {
+		List<MediaRangeSpec> result = new ArrayList<MediaRangeSpec>();
 		Matcher m = mediaRangePattern.matcher(s);
 		while (m.find()) {
 			result.add(parseRange(m.group()));
@@ -103,13 +101,13 @@ public class MediaRangeSpec {
 	
 	private final String type;
 	private final String subtype;
-	private final List parameterNames;
-	private final List parameterValues;
+	private final List<String> parameterNames;
+	private final List<String> parameterValues;
 	private final String mediaType;
 	private       double quality;
 
 	private MediaRangeSpec(String type, String subtype, 
-			List parameterNames, List parameterValues,
+			List<String> parameterNames, List<String> parameterValues,
 			double quality) {
 		this.type = type;
 		this.subtype = subtype;
@@ -120,7 +118,7 @@ public class MediaRangeSpec {
 	}
 	
 	private String buildMediaType() {
-		StringBuffer result = new StringBuffer();
+		StringBuilder result = new StringBuilder();
 		result.append(type);
 		result.append("/");
 		result.append(subtype);
@@ -159,7 +157,7 @@ public class MediaRangeSpec {
 	public String getParameter(String parameterName) {
 		for (int i = 0; i < parameterNames.size(); i++) {
 			if (parameterNames.get(i).equals(parameterName.toLowerCase())) {
-				return (String) parameterValues.get(i);
+				return parameterValues.get(i);
 			}
 		}
 		return null;
@@ -182,33 +180,33 @@ public class MediaRangeSpec {
     }
 
     public int getPrecedence(MediaRangeSpec range) {
-		if (range.isWildcardType()) return 1;
-		if (!range.type.equals(type)) return 0;
-		if (range.isWildcardSubtype()) return 2;
-		if (!range.subtype.equals(subtype)) return 0;
-		if (range.getParameterNames().isEmpty()) return 3;
-		int result = 3;
-		for (int i = 0; i < range.getParameterNames().size(); i++) {
-			String name = (String) range.getParameterNames().get(i);
-			String value = range.getParameter(name);
-			if (!value.equals(getParameter(name))) return 0;
-			result++;
-		}
-		return result;
+        if (range.isWildcardType()) return 1;
+        if (!range.type.equals(type)) return 0;
+        if (range.isWildcardSubtype()) return 2;
+        if (!range.subtype.equals(subtype)) return 0;
+        if (range.getParameterNames().isEmpty()) return 3;
+        int result = 3;
+        for (int i = 0; i < range.getParameterNames().size(); i++) {
+            String name = (String) range.getParameterNames().get(i);
+            String value = range.getParameter(name);
+            if (!value.equals(getParameter(name))) return 0;
+            result++;
+        }
+        return result;
 	}
 	
-	public MediaRangeSpec getBestMatch(List mediaRanges) {
-		MediaRangeSpec result = null;
-		int bestPrecedence = 0;
-		Iterator it = mediaRanges.iterator();
-		while (it.hasNext()) {
-			MediaRangeSpec range = (MediaRangeSpec) it.next();
-			if (getPrecedence(range) > bestPrecedence) {
-				bestPrecedence = getPrecedence(range);
-				result = range;
-			}
-		}
-		return result;
+	public MediaRangeSpec getBestMatch(List<MediaRangeSpec> mediaRanges) {
+            MediaRangeSpec result = null;
+            int bestPrecedence = 0;
+            Iterator<MediaRangeSpec> it = mediaRanges.iterator();
+            while (it.hasNext()) {
+                MediaRangeSpec range = it.next();
+                if (getPrecedence(range) > bestPrecedence) {
+                    bestPrecedence = getPrecedence(range);
+                    result = range;
+                }
+            }
+            return result;
 	}
 	
     @Override
