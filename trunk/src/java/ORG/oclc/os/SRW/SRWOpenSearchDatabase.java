@@ -11,6 +11,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Properties;
 import javax.servlet.http.HttpServletRequest;
 import javax.xml.parsers.DocumentBuilder;
@@ -36,6 +37,25 @@ import org.z3950.zing.cql.CQLTermNode;
 public class SRWOpenSearchDatabase extends SRWDatabase {
     static Log log=LogFactory.getLog(SRWOpenSearchDatabase.class);
     private String author, contact, description, restrictions, schemaID, schemaLocation, schemaName, title;
+    private final StringBuilder localSchemaInfo=new StringBuilder();
+    private final HashMap<String, String> templates=new HashMap<String, String>();
+
+    public void addSchema(String name, String id, String location, String title, String template) {
+        localSchemaInfo.append("          <schema");
+        if(id!=null) {
+            localSchemaInfo.append("              identifier=\"").append(id).append("\"\n");
+            templates.put(id, template);
+        }
+        if(location!=null)
+            localSchemaInfo.append("              location=\"").append(location).append("\"\n");
+        localSchemaInfo.append("              sort=\"false\" retrieve=\"true\" name=\"").append(name).append("\">\n")
+          .append("            <title>").append(title).append("</title>\n")
+          .append("            </schema>\n");
+        if(name!=null)
+            templates.put(name, template);
+        if(location!=null)
+            templates.put(location, template);
+    }
 
     @Override
     public String getDatabaseInfo() {
@@ -64,12 +84,11 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
     public String getIndexInfo() {
         StringBuilder sb=new StringBuilder();
         sb.append("        <indexInfo>\n")
-          .append("          <set identifier=\"info:srw/oai-context-set/1/oai-v1.0\"")
-          .append(" name=\"oai\"/>\n")
+          .append("          <set identifier=\"info:srw/cql-context-set/1/cql-v1.1\" name=\"cql\"/>\n")
           .append("          <index>\n")
           .append("            <title>cql.serverChoice</title>\n")
           .append("            <map>\n")
-          .append("              <name set=\"oai\">serverChoice</name>\n")
+          .append("              <name set=\"cql\">serverChoice</name>\n")
           .append("              </map>\n")
           .append("            <configInfo>\n")
           .append("              <supports type='relation'>=</supports>\n")
@@ -81,18 +100,14 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
 
     @Override
     public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return new OpenSearchQueryResult(query, request, templates);
     }
 
     @Override
     public String getSchemaInfo() {
         StringBuilder sb=new StringBuilder();
         sb.append("        <schemaInfo>\n")
-          .append("          <schema identifier=\"").append(schemaID).append("\"\n")
-          .append("              location=\"").append(schemaLocation).append("\"\n")
-          .append("              sort=\"false\" retrieve=\"true\" name=\"").append(schemaName).append("\">\n")
-          .append("            <title>RDF</title>\n")
-          .append("            </schema>\n")
+          .append(localSchemaInfo.toString())
           .append("          </schemaInfo>\n");
         return sb.toString();
     }
@@ -179,6 +194,10 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
             n=attrs.getNamedItem("type");
             type=n.getTextContent();
             log.info("<Url type='"+type+"' template='"+template+"'/>");
+            if("application/rss+xml".equals(title)){
+                addSchema("RSS2.0", "rss", "http://europa.eu/rapid/conf/RSS20.xsd",
+                        "RSS Items", template);
+            }
         }
         log.debug("leaving SRWOpenSearchDatabase.init");
     }
