@@ -75,7 +75,7 @@ public abstract class SRWDatabase {
 
     public abstract QueryResult getQueryResult(String query,
                                   SearchRetrieveRequestType request)
-                                  throws InstantiationException;
+                                  throws InstantiationException, SRWDiagnostic;
 
     public abstract TermList    getTermList(CQLTermNode term, int position,
                                   int maxTerms, ScanRequestType request);
@@ -554,6 +554,13 @@ public abstract class SRWDatabase {
                 log.error(e, e);
                 return diagnostic(SRWDiagnostic.GeneralSystemError,
                         e.getMessage(), response);
+            } catch (SRWDiagnostic e) {
+                log.error("Diagnostic "+e.getCode()+" caught while doing query:");
+                log.error(Utilities.byteArrayToString(query.getBytes(Charset.forName("UTF-8"))));
+                log.error("request: "+request);
+                log.error(e, e);
+                return diagnostic(e.getCode(),
+                        e.getAddInfo(), response);
             }
         }
 

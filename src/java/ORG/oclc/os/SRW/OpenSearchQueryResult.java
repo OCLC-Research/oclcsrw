@@ -8,15 +8,31 @@ package ORG.oclc.os.SRW;
 import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import java.util.HashMap;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  *
  * @author Ralph
  */
 class OpenSearchQueryResult extends QueryResult {
+    private static final Log log=LogFactory.getLog(OpenSearchQueryResult.class);
 
     public OpenSearchQueryResult(String query, SearchRetrieveRequestType request,
-            HashMap<String, String> templates) {
+            SRWOpenSearchDatabase db) throws InstantiationException, SRWDiagnostic {
+        // figure out what schema/template to use
+        String schema=request.getRecordSchema();
+        if(schema==null)
+            schema=db.defaultSchemaID;
+        if(schema==null)
+            schema=db.defaultSchemaName;
+        if(schema==null) {
+            log.error("No schema provided");
+            throw new InstantiationException("No schema provided");
+        }
+        String template=db.templates.get(schema);
+        if(template==null)
+            throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schema);
     }
 
     @Override
