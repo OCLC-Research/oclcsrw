@@ -36,9 +36,9 @@ import org.z3950.zing.cql.CQLTermNode;
  */
 public class SRWOpenSearchDatabase extends SRWDatabase {
     static Log log=LogFactory.getLog(SRWOpenSearchDatabase.class);
-    private String author, contact, description, restrictions, schemaID, schemaLocation, schemaName, title;
+    protected String author, contact, description, restrictions, defaultSchemaID, defaultSchemaName, title;
     private final StringBuilder localSchemaInfo=new StringBuilder();
-    private final HashMap<String, String> templates=new HashMap<String, String>();
+    protected final HashMap<String, String> templates=new HashMap<String, String>();
 
     public void addSchema(String name, String id, String location, String title, String template) {
         localSchemaInfo.append("          <schema");
@@ -100,7 +100,7 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
 
     @Override
     public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException {
-        return new OpenSearchQueryResult(query, request, templates);
+        return new OpenSearchQueryResult(query, request, this);
     }
 
     @Override
@@ -141,9 +141,8 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         description=dbProperties.getProperty("SRWOpenSearchDatabase.description");
         restrictions=dbProperties.getProperty("SRWOpenSearchDatabase.restrictions");
         title=dbProperties.getProperty("SRWOpenSearchDatabase.title");
-        schemaName=dbProperties.getProperty("SRWOpenSearchDatabase.schemaName");
-        schemaID=dbProperties.getProperty("SRWOpenSearchDatabase.schemaID");
-        schemaLocation=dbProperties.getProperty("SRWOpenSearchDatabase.schemaLocation");
+        defaultSchemaName=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaName");
+        defaultSchemaID=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaID");
         URL url=new URL(urlStr);
         BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
         StringBuilder sb=new StringBuilder();
