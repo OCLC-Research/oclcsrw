@@ -39,6 +39,7 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
     protected String author, contact, description, restrictions, defaultSchemaID, defaultSchemaName, title;
     private final StringBuilder localSchemaInfo=new StringBuilder();
     protected final HashMap<String, String> templates=new HashMap<String, String>();
+    public int itemsPerPage;
 
     public void addSchema(String name, String id, String location, String title, String template) {
         localSchemaInfo.append("          <schema");
@@ -143,6 +144,7 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         title=dbProperties.getProperty("SRWOpenSearchDatabase.title");
         defaultSchemaName=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaName");
         defaultSchemaID=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaID");
+        itemsPerPage=Integer.parseInt(dbProperties.getProperty("SRWOpenSearchDatabase.itemsPerPage", "0"));
         URL url=new URL(urlStr);
         BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
         StringBuilder sb=new StringBuilder();
