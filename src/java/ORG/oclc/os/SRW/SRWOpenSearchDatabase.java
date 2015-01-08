@@ -100,7 +100,7 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
     }
 
     @Override
-    public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException {
+    public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException, SRWDiagnostic {
         return new OpenSearchQueryResult(query, request, this);
     }
 
