@@ -7,9 +7,16 @@ package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
-import java.util.HashMap;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.axis.transport.http.HTTPTransport;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
 import org.apache.commons.logging.Log;
@@ -83,7 +90,22 @@ class OpenSearchQueryResult extends QueryResult {
                 template=template.replace(parameter, Integer.toString(start));
             }
         }
-        template.replaceAll("{queryterms}", query);
+        template=template.replace("{queryterms}", query);
+        System.out.println("url="+template);
+        URL url;
+        try {
+            url=new URL(template);
+        } catch (MalformedURLException ex) {
+            throw new SRWDiagnostic(SRWDiagnostic.GeneralSystemError, template);
+        }
+        try {
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.connect();
+            System.out.println("contentType="+conn.getContentType());
+            System.out.println("responseCode="+conn.getResponseCode());
+        } catch (IOException ex) {
+            throw new SRWDiagnostic(SRWDiagnostic.GeneralSystemError, ex.getMessage());
+        }
     }
 
     @Override
