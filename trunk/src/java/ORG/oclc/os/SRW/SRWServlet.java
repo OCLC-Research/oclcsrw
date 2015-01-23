@@ -113,7 +113,7 @@ public class SRWServlet extends AxisServlet {
 //    public static final String INIT_PROPERTY_JWS_CLASS_DIR =
 //        "axis.jws.servletClassDir";
     // These have default values.
-    private String portNumber, serverAddress, serverName, transportName;
+    private String serverAddress, transportName;
 
     private ServletSecurityProvider securityProvider = null;
 
@@ -170,25 +170,18 @@ public class SRWServlet extends AxisServlet {
         srwInfo = new SRWServletInfo();
         ServletConfig config = getServletConfig();
         srwInfo.init(config);
-        portNumber = config.getInitParameter("portNumber");
+        String portNumber = config.getInitParameter("portNumber");
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("portNumber=" + portNumber);
         }
-        if (portNumber == null) {
-            portNumber = ":80";
-        } else if (!portNumber.startsWith(":")) {
-            portNumber = ":" + portNumber;
-        }
 
-        serverName = config.getInitParameter("serverName");
+        String serverName = config.getInitParameter("serverName");
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("serverName=" + serverName);
         }
-        if (serverName == null) {
-            serverName = "localhost";
-        }
 
-        serverAddress = "http://" + serverName + portNumber;
+        if(serverName!=null && portNumber!=null)
+            serverAddress = "http://" + serverName + ":" + portNumber;
 
         uriResolverFromDisk = new URIResolverFromDisk(SRWServletInfo.srwHome, SRWServletInfo.webappHome);
         addressInHeader = srwInfo.addressInHeader;
@@ -1565,6 +1558,9 @@ public class SRWServlet extends AxisServlet {
         servletLog.debug("enter processMethodRequest");
 //        servletLoginfo("at start: totalMemory="+rt.totalMemory()+", freeMemory="+rt.freeMemory());
         SRWDatabase db = (SRWDatabase) msgContext.getProperty("db");
+        if(serverAddress==null) {
+            serverAddress="http://"+req.getServerName()+":"+req.getServerPort();
+        }
         if (servletLog.isDebugEnabled()) {
             Enumeration<?> enumer = req.getParameterNames();
             String name;
