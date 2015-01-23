@@ -18,7 +18,6 @@ package gov.loc.www.zing.srw.srw_bindings;
 
 import ORG.oclc.os.SRW.SRWDatabase;
 import ORG.oclc.os.SRW.SRWDiagnostic;
-import ORG.oclc.os.SRW.SRWServlet;
 import ORG.oclc.os.SRW.Utilities;
 import gov.loc.www.zing.cql.xcql.BooleanType;
 import gov.loc.www.zing.cql.xcql.OperandType;
@@ -334,7 +333,7 @@ public class SRWSoapBindingImpl implements SRWPort {
         ert.setMaximumRecords(request.getMaximumRecords());
         String query=request.getQuery();
         if(query!=null && query.length()>0) {
-            ert.setQuery(SRWServlet.encode(query));
+            ert.setQuery(query);
             try {
                 CQLNode root=cqlparser.parse(query);
                 ert.setXQuery(toOperandType(root));
@@ -406,7 +405,7 @@ public class SRWSoapBindingImpl implements SRWPort {
             RelationType rt=new RelationType();
             rt.setValue(ctn.getRelation().getBase());
             sct.setRelation(rt);
-            sct.setTerm(SRWServlet.encode(ctn.getTerm()));
+            sct.setTerm(ctn.getTerm());
             ot.setSearchClause(sct);
         }
         else {
