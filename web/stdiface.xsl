@@ -3,16 +3,16 @@
 <xsl:stylesheet version="1.0"
   xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
   xmlns:srw="http://www.loc.gov/zing/srw/"
-  xmlns:diag="http://www.loc.gov/zing/srw/diagnostic/">
+  xmlns:diag="http://www.loc.gov/zing/srw/diagnostic/" exclude-result-prefixes="srw">
 
 <xsl:output method="html" doctype-public="-//W3C//DTD XHTML 1.0 Transitional//EN" doctype-system="http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"/>
 
 <xsl:template name="stdiface">
+<html>
 <head>
 <title><xsl:value-of select="$title"/></title>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
-<!--link type="text/css" rel="stylesheet" href="http://shipengrover-j.oa.oclc.org/terminologies/temp/scifi-ff-footer_files/researchproject_oclc.css"/-->
-<link type="text/css" rel="stylesheet" href="http://www.oclc.org/research/common/css/researchproject_oclc.css"/>
+<link href="http://www.oclc.org/common/css/basic_oclc.css" rel="stylesheet" type="text/css"/>
+<link href="http://www.oclc.org/common/css/researchproject_oclc.css" rel="stylesheet" type="text/css"/>
 <style type="text/css">
 &lt;!--
 table.layout { border: none; margin: 0; padding: 0; width: 100%; }
@@ -20,44 +20,50 @@ table.layout td { border: none; margin: 0; padding: 0; }
 table.formtable th, table.formtable td { border-top: 1px solid #999; border-left: 1px solid #999; color: #333; padding: 4px; text-align: left; vertical-align: top}
 table.formtable td { width: 100%}
 input.button { margin: 0; }
+#crumbs {
+	font-size: xx-small;
+	voice-family: "\"}\"";
+	voice-family: inherit;
+	font-size: x-small;
+	margin-bottom: 15px;
+}
 --&gt;
 </style>
 </head>
 <body>
-<div id="masthead">
+<table cellspacing="0" id="bnrResearch">
+<tr>
+<td id="tdResearch"><a href="http://www.oclc.org/research/">A Project of OCLC Research</a></td>
+<td id="tdOclc"><a href="http://www.oclc.org/">OCLC Online Computer Library Center</a></td>
+</tr>
+<tr>
+<td id="tdProject">
+<h2><xsl:value-of select="$title"/></h2>
+</td>
+<td id="tdLogo"><a href="http://www.oclc.org/"><img src="http://www.oclc.org/common/images/logos/oclclogo_gray.gif" alt="OCLC" width="60" height="31"/></a></td>
+</tr>
+</table>
+<xsl:apply-templates/>
+<p>
+<a href="?">Home</a>
+</p>
+<p>
+<a href="http://www.oclc.org/research/software/srw">
+<img src="http://www.oclc.org/resources/research/images/badges/oclc_srwu.gif" alt="Powered by OCLC SRW/U" width="80" height="15"/>
+</a>
+</p>
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
 
-	<div id="or"><a href="http://www.oclc.org/research">A Project of OCLC Research</a></div>
-	<div id="project"><xsl:value-of select="$dbname"/></div>
-	<div id="logo"><a href="http://www.oclc.org/default.htm"><img src="http://www.oclc.org/research/common/images/logo_wh_h_gray.gif" alt="OCLC" /></a></div>
+  ga('create', '%GAA%', '%GAD%');
+  ga('send', 'pageview');
 
-</div>
-<!-- close masthead -->
-  <xsl:apply-templates/>
-<div id="footer">
-	<div id="legal">
-		<div id="copyright">&#169; 2008 OCLC</div>
-		<div id="TandC">This project is covered by the <a href="http://www.oclc.org/research/researchworks/terms.htm">OCLC ResearchWorks Terms and Conditions</a></div>
-		<!-- add or hide badges as required -->
-		<div id="badges">
-		<!-- sru/w -->
-		<a href="http://www.oclc.org/research/software/srw"><img src="http://www.oclc.org/research/images/badges/oclc_srwu.gif"/></a>
-		<!-- errol -->
-		<!--img src="http://www.oclc.org/research/images/badges/oclc_errol.gif"-->
-		<!-- Gwen -->
-		<img src="http://www.oclc.org/research/images/badges/oclc_gwen.gif"/>
-		<!-- oaicat -->
-		<!--img src="http://www.oclc.org/research/images/badges/oclc_oaicat.gif"-->
-		<!-- pears -->
-		<img src="http://www.oclc.org/research/images/badges/oclc_pears.gif"/>
-		<!-- xsltproc -->
-		<!--img src="http://www.oclc.org/research/images/badges/oclc_xsltproc.gif"-->
-		
-		
-		</div>
-	</div>
-</div>
+</script>
 </body>
-
+</html>
 </xsl:template>
 
 <xsl:template match="srw:version">
