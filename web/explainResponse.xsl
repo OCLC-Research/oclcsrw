@@ -25,11 +25,6 @@
       inform = document.CQLForm;
       outform = document.SRUForm;
       max = inform.maxIndex.value;
-	if(outform.resultSetTTL.value==0) {
-        if(outform.sortKeys.value.indexOf(',')) {
-          outform.resultSetTTL.value=300;
-        }
-      }
       cql = "";
       prevIdx = 0;
       // Step through elements in form to create CQL
