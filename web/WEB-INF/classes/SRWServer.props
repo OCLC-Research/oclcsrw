@@ -69,5 +69,5 @@ db.lucenetest.home=c:/oclcsrwlucene-read-only/lucene
 #db.lcnaf.configuration=SRWDatabase.props
 
 db.viaf.class=ORG.oclc.os.SRW.SRWOpenSearchDatabase
-db.viaf.configuration=SRWDatabase.viaf.props
+db.viaf.configuration=SRWDatabase.viafOpenSearch.props
 
