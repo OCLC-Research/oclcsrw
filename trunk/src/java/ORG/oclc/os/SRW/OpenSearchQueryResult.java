@@ -8,10 +8,12 @@ package ORG.oclc.os.SRW;
 import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -21,6 +23,10 @@ import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.z3950.zing.cql.CQLNode;
+import org.z3950.zing.cql.CQLParseException;
+import org.z3950.zing.cql.CQLParser;
+import org.z3950.zing.cql.CQLTermNode;
 
 /**
  *
@@ -31,7 +37,7 @@ class OpenSearchQueryResult extends QueryResult {
     String query;
     int count=0;
     
-    public OpenSearchQueryResult(String query, SearchRetrieveRequestType request,
+    public OpenSearchQueryResult(String queryStr, SearchRetrieveRequestType request,
             SRWOpenSearchDatabase db) throws InstantiationException, SRWDiagnostic {
         this.query=query;
         // figure out what schema/template to use
@@ -44,16 +50,34 @@ class OpenSearchQueryResult extends QueryResult {
             log.error("No schema provided");
             throw new InstantiationException("No schema provided");
         }
+
+        CQLParser parser = new CQLParser(CQLParser.V1POINT1);
+        CQLNode query;
+        try {
+            query=parser.parse(queryStr);
+        }
+        catch(CQLParseException e) {
+            throw new SRWDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
+        } catch (IOException e) {
+            throw new SRWDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
+        }
+        if(!(query instanceof CQLTermNode)) {
+            throw new SRWDiagnostic(SRWDiagnostic.UnsupportedBooleanOperator, null);
+        }
+        CQLTermNode term=(CQLTermNode) query;
+        
         String template=db.templates.get(schema);
+        log.debug("template="+template);
         if(template==null)
             throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schema);
-        Pattern p=Pattern.compile("\\{[^\\}]\\}");
+        Pattern p=Pattern.compile("\\{([^\\}]+)\\}");
         Matcher m=p.matcher(template);
         String parameter;
         while(m.find()) {
             parameter=m.group();
+            log.debug("template parameter="+parameter);
             if(parameter.equals("{searchTerms}"))
-                template=template.replace(parameter, query);
+                template=template.replace(parameter, term.getTerm());
             else if(parameter.equals("{count}")) {
                 NonNegativeInteger nni = request.getMaximumRecords();
                 if(nni!=null)
@@ -90,8 +114,14 @@ class OpenSearchQueryResult extends QueryResult {
                 template=template.replace(parameter, Integer.toString(start));
             }
         }
-        template=template.replace("{queryterms}", query);
-        System.out.println("url="+template);
+        int i=template.indexOf('?');
+        if(i>0)
+            try {
+                template=template.substring(0, i+1)+URLEncoder.encode(template.substring(i+1), "UTF-8");
+        } catch (UnsupportedEncodingException ex) {
+            Logger.getLogger(OpenSearchQueryResult.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        log.debug("url="+template);
         URL url;
         try {
             url=new URL(template);
@@ -101,8 +131,8 @@ class OpenSearchQueryResult extends QueryResult {
         try {
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.connect();
-            System.out.println("contentType="+conn.getContentType());
-            System.out.println("responseCode="+conn.getResponseCode());
+            log.debug("contentType="+conn.getContentType());
+            log.debug("responseCode="+conn.getResponseCode());
         } catch (IOException ex) {
             throw new SRWDiagnostic(SRWDiagnostic.GeneralSystemError, ex.getMessage());
         }
