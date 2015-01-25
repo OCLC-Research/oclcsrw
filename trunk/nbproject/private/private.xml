@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project-private xmlns="http://www.netbeans.org/ns/project-private/1">
     <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/1"/>
+    <editor-bookmarks xmlns="http://www.netbeans.org/ns/editor-bookmarks/2" lastBookmarkId="0"/>
+    <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
+        <group>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/web/WEB-INF/classes/SRWServer.props</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/src/java/ORG/oclc/os/SRW/OpenSearchRecordIterator.java</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/web/WEB-INF/classes/log4j.properties</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/src/java/ORG/oclc/os/SRW/SRWDiagnostic.java</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/src/java/ORG/oclc/os/SRW/OpenSearchQueryResult.java</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/web/WEB-INF/web.xml</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/src/java/ORG/oclc/os/SRW/SRWDatabase.java</file>
+            <file>file:/C:/Users/Ralph/NetBeansProjects/oclcsrw/src/java/ORG/oclc/os/SRW/SRWOpenSearchDatabase.java</file>
+        </group>
+    </open-files>
 </project-private>
