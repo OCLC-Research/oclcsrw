@@ -52,8 +52,11 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         localSchemaInfo.append("              sort=\"false\" retrieve=\"true\" name=\"").append(name).append("\">\n")
           .append("            <title>").append(title).append("</title>\n")
           .append("            </schema>\n");
-        if(name!=null)
+        if(name!=null) {
             templates.put(name, template);
+            if(defaultSchemaName==null)
+                defaultSchemaName=name;
+        }
         if(location!=null)
             templates.put(location, template);
     }
@@ -187,15 +190,19 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         NodeList nl = (NodeList) expr.evaluate(document, XPathConstants.NODESET);
         NamedNodeMap attrs;
         String template, type;
+        if(nl.getLength()==0) {
+            throw new InstantiationException("No OpenSearchDescription/Url found in "+url);
+        }
         for(int i=0; i<nl.getLength(); i++) {
             Node n=nl.item(i);
             attrs = n.getAttributes();
             n=attrs.getNamedItem("template");
             template=n.getTextContent();
+            log.debug("template="+template);
             n=attrs.getNamedItem("type");
             type=n.getTextContent();
             log.info("<Url type='"+type+"' template='"+template+"'/>");
-            if("application/rss+xml".equals(title)){
+            if("application/rss+xml".equals(type)){
                 addSchema("RSS2.0", "rss", "http://europa.eu/rapid/conf/RSS20.xsd",
                         "RSS Items", template);
             }
