@@ -7,22 +7,28 @@ package ORG.oclc.os.SRW;
 
 import gov.loc.www.zing.srw.ExtraDataType;
 import gov.loc.www.zing.srw.SearchRetrieveRequestType;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLEncoder;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.axis.transport.http.HTTPTransport;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import org.apache.axis.types.NonNegativeInteger;
 import org.apache.axis.types.PositiveInteger;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.xml.sax.SAXException;
 import org.z3950.zing.cql.CQLNode;
 import org.z3950.zing.cql.CQLParseException;
 import org.z3950.zing.cql.CQLParser;
@@ -36,10 +42,14 @@ class OpenSearchQueryResult extends QueryResult {
     private static final Log log=LogFactory.getLog(OpenSearchQueryResult.class);
     String query;
     int count=0;
+    private long numberOfRecords;
     
     public OpenSearchQueryResult(String queryStr, SearchRetrieveRequestType request,
             SRWOpenSearchDatabase db) throws InstantiationException, SRWDiagnostic {
-        this.query=query;
+        int start;
+        PositiveInteger pi;
+        String parameter;
+        this.query=queryStr;
         // figure out what schema/template to use
         String schema=request.getRecordSchema();
         if(schema==null)
@@ -52,19 +62,17 @@ class OpenSearchQueryResult extends QueryResult {
         }
 
         CQLParser parser = new CQLParser(CQLParser.V1POINT1);
-        CQLNode query;
+        CQLNode cqlQuery;
         try {
-            query=parser.parse(queryStr);
+            cqlQuery=parser.parse(queryStr);
         }
-        catch(CQLParseException e) {
-            throw new SRWDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
-        } catch (IOException e) {
+        catch(CQLParseException | IOException e) {
             throw new SRWDiagnostic(SRWDiagnostic.QuerySyntaxError, queryStr);
         }
-        if(!(query instanceof CQLTermNode)) {
+        if(!(cqlQuery instanceof CQLTermNode)) {
             throw new SRWDiagnostic(SRWDiagnostic.UnsupportedBooleanOperator, null);
         }
-        CQLTermNode term=(CQLTermNode) query;
+        CQLTermNode term=(CQLTermNode) cqlQuery;
         
         String template=db.templates.get(schema);
         log.debug("template="+template);
@@ -72,55 +80,51 @@ class OpenSearchQueryResult extends QueryResult {
             throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, schema);
         Pattern p=Pattern.compile("\\{([^\\}]+)\\}");
         Matcher m=p.matcher(template);
-        String parameter;
         while(m.find()) {
             parameter=m.group();
             log.debug("template parameter="+parameter);
-            if(parameter.equals("{searchTerms}"))
-                template=template.replace(parameter, term.getTerm());
-            else if(parameter.equals("{count}")) {
-                NonNegativeInteger nni = request.getMaximumRecords();
-                if(nni!=null)
-                    count=nni.intValue();
-                else {
-                    count=db.defaultNumRecs;
-                }
-                if(count<=0)
-                    throw new InstantiationException("maximumRecords parameter not supplied and defaultNumRecs not specified in the database properties file");
-                template=template.replace(parameter, Integer.toString(count));
-            }
-            else if(parameter.equals("{startIndex}")) {
-                PositiveInteger pi = request.getStartRecord();
-                int start;
-                if(pi!=null)
-                    start=pi.intValue();
-                else {
-                    start=1;
-                }
-                template=template.replace(parameter, Integer.toString(start));
-            }
-            else if(parameter.equals("{startPage}")) {
-                PositiveInteger pi = request.getStartRecord();
-                int start;
-                if(pi!=null) {
-                    start=pi.intValue();
-                    if(db.itemsPerPage==0)
-                        throw new InstantiationException("template expects startPage parameter but itemsPerPage not specified in the database properties file");
-                    start=start/db.itemsPerPage;
-                }
-                else {
-                    start=1;
-                }
-                template=template.replace(parameter, Integer.toString(start));
+            switch (parameter) {
+                case "{searchTerms}":
+                    template=template.replace(parameter, term.getTerm());
+                    break;
+                case "{count}":
+                    NonNegativeInteger nni = request.getMaximumRecords();
+                    if(nni!=null)
+                        count=nni.intValue();
+                    else {
+                        count=db.defaultNumRecs;
+                    }   if(count<=0)
+                        throw new InstantiationException("maximumRecords parameter not supplied and defaultNumRecs not specified in the database properties file");
+                    template=template.replace(parameter, Integer.toString(count));
+                    break;
+                case "{startIndex}":
+                    pi = request.getStartRecord();
+                    if(pi!=null)
+                        start=pi.intValue();
+                    else {
+                        start=1;
+                    }
+                    template=template.replace(parameter, Integer.toString(start));
+                    break;
+                case "{startPage}":
+                    pi = request.getStartRecord();
+                    if(pi!=null) {
+                        start=pi.intValue();
+                        if(db.itemsPerPage==0)
+                            throw new InstantiationException("template expects startPage parameter but itemsPerPage not specified in the database properties file");
+                        start=start/db.itemsPerPage;
+                    }
+                    else {
+                        start=1;
+                    }
+                    template=template.replace(parameter, Integer.toString(start));
+                    break;
             }
         }
         int i=template.indexOf('?');
         if(i>0)
-            try {
-                template=template.substring(0, i+1)+URLEncoder.encode(template.substring(i+1), "UTF-8");
-        } catch (UnsupportedEncodingException ex) {
-            Logger.getLogger(OpenSearchQueryResult.class.getName()).log(Level.SEVERE, null, ex);
-        }
+            template=template.substring(0, i+1)+template.substring(i+1).replaceAll(" ", "+");
+        
         log.debug("url="+template);
         URL url;
         try {
@@ -133,6 +137,7 @@ class OpenSearchQueryResult extends QueryResult {
             conn.connect();
             log.debug("contentType="+conn.getContentType());
             log.debug("responseCode="+conn.getResponseCode());
+            processResponse(request, conn, schema, conn.getContentType());
         } catch (IOException ex) {
             throw new SRWDiagnostic(SRWDiagnostic.GeneralSystemError, ex.getMessage());
         }
@@ -140,12 +145,61 @@ class OpenSearchQueryResult extends QueryResult {
 
     @Override
     public long getNumberOfRecords() {
-        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
+        return numberOfRecords;
     }
 
     @Override
     public RecordIterator newRecordIterator(long index, int numRecs, String schemaId, ExtraDataType edt) throws InstantiationException {
         return new OpenSearchRecordIterator(index, numRecs, schemaId, edt);
     }
+
+    private void processResponse(SearchRetrieveRequestType request, HttpURLConnection conn, String schema, String type) throws SRWDiagnostic {
+        try {
+            int i;
+            if((i=type.indexOf(';'))>=0) {
+                type=type.substring(0, i).trim();
+            }
+            switch(type) {
+                case "application/rss+xml":
+                    processRssResponse(request, conn);
+                    break;
+                case "text/xml": // argh! not very helpful!
+                default:
+                    String input=readInput(conn);
+                    log.error(input.substring(0, Math.min(500, input.length())));
+                    throw new SRWDiagnostic(SRWDiagnostic.RecordNotAvailableInThisSchema, type);
+            }
+        } catch (IOException | ParserConfigurationException | SAXException ex) {
+            throw new SRWDiagnostic(SRWDiagnostic.GeneralSystemError, ex.getClass().getName()+":"+ex.getMessage());
+        }
+    }
     
+    private String readInput(HttpURLConnection conn) throws IOException {
+        StringBuilder response;
+        try (BufferedReader in = new BufferedReader(
+                new InputStreamReader(conn.getInputStream()))) {
+            String inputLine;
+            response = new StringBuilder();
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+        }
+        return response.toString();
+    }
+
+    private void processRssResponse(SearchRetrieveRequestType request, HttpURLConnection conn) throws IOException, ParserConfigurationException, SAXException {
+        Document doc = parseInput(conn.getInputStream());
+        Element root = doc.getDocumentElement();
+        Element channel = (Element)root.getElementsByTagName("channel").item(0);
+        log.debug("channel="+channel);
+        Node totalResults=channel.getElementsByTagName("totalResults").item(0);
+        log.debug("totalResults="+totalResults);
+        numberOfRecords=Long.parseLong(totalResults.getNodeValue());
+    }
+
+    private Document parseInput(InputStream input) throws ParserConfigurationException, SAXException, IOException {
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db = dbf.newDocumentBuilder();
+        return db.parse(input);
+    }
 }
