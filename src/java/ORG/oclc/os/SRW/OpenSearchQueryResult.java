@@ -14,8 +14,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
@@ -28,6 +26,7 @@ import org.apache.commons.logging.LogFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import org.z3950.zing.cql.CQLNode;
 import org.z3950.zing.cql.CQLParseException;
@@ -43,6 +42,7 @@ class OpenSearchQueryResult extends QueryResult {
     String query;
     int count=0;
     private long numberOfRecords;
+    private Element channel;
     
     public OpenSearchQueryResult(String queryStr, SearchRetrieveRequestType request,
             SRWOpenSearchDatabase db) throws InstantiationException, SRWDiagnostic {
@@ -150,7 +150,7 @@ class OpenSearchQueryResult extends QueryResult {
 
     @Override
     public RecordIterator newRecordIterator(long index, int numRecs, String schemaId, ExtraDataType edt) throws InstantiationException {
-        return new OpenSearchRecordIterator(index, numRecs, schemaId, edt);
+        return new OpenSearchRecordIterator(index, numRecs, schemaId, edt, channel);
     }
 
     private void processResponse(SearchRetrieveRequestType request, HttpURLConnection conn, String schema, String type) throws SRWDiagnostic {
@@ -190,15 +190,21 @@ class OpenSearchQueryResult extends QueryResult {
     private void processRssResponse(SearchRetrieveRequestType request, HttpURLConnection conn) throws IOException, ParserConfigurationException, SAXException {
         Document doc = parseInput(conn.getInputStream());
         Element root = doc.getDocumentElement();
-        Element channel = (Element)root.getElementsByTagName("channel").item(0);
+        channel = (Element)root.getElementsByTagName("channel").item(0);
         log.debug("channel="+channel);
-        Node totalResults=channel.getElementsByTagName("totalResults").item(0);
+        Node title=channel.getElementsByTagName("title").item(0);
+        NodeList nodes = channel.getElementsByTagName("*");
+        for(int i=0; i<nodes.getLength(); i++)
+            log.debug("node["+i+"]="+nodes.item(i).getNodeName());
+        log.debug("title="+title.getTextContent());
+        Node totalResults=root.getElementsByTagNameNS("*", "totalResults").item(0);
         log.debug("totalResults="+totalResults);
-        numberOfRecords=Long.parseLong(totalResults.getNodeValue());
+        numberOfRecords=Long.parseLong(totalResults.getTextContent());
     }
 
     private Document parseInput(InputStream input) throws ParserConfigurationException, SAXException, IOException {
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        dbf.setNamespaceAware(true);
         DocumentBuilder db = dbf.newDocumentBuilder();
         return db.parse(input);
     }
