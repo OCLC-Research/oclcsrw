@@ -1,5 +1,5 @@
 /*
-   Copyright 2012 OCLC Online Computer Library Center, Inc.
+   Copyright 2015 OCLC Online Computer Library Center, Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ public class ipUseThrottleFilter implements Filter {
     static Log log=LogFactory.getLog(ipUseThrottleFilter.class);
     static final ConcurrentHashMap<String, Integer> simultaneousRequestsByShortIPAddr=new ConcurrentHashMap<String, Integer>();
     static final HashMap<String, String> equivalentAddresses=new HashMap<String, String>();
+    static final HashSet<String> ignorableAddresses=new HashSet<String>();
     static final HashMap<String, Integer> totalRequests=new HashMap<String, Integer>();
     static final Set<String> simultaneousRequests=new HashSet<String>();
     static int /*maxSimultaneousRequests=3,*/ maxTotalSimultaneousRequests=10, nextReportingHour;
@@ -108,12 +109,21 @@ public class ipUseThrottleFilter implements Filter {
                     equivalentAddresses.put(first, second);
             }
         }
-    }
+
+        String iA=fc.getInitParameter("ignorableAddresses");
+        if(iA!=null) {
+            StringTokenizer st=new StringTokenizer(iA, ", ");
+            while(st.hasMoreTokens())
+                ignorableAddresses.add(st.nextToken());
+        }
+}
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-        String longAddr=null, shortAddr, s, transactionKey;
+        String longAddr=null, shortAddr, s, transactionKey=null;
         int count;
+        boolean ignorable=false;
+
         synchronized(simultaneousRequestsByShortIPAddr) {
             if(totalSimultaneousRequests>=maxTotalSimultaneousRequests) {
                 log.error("This system has exceeded the maxTotalSimultaneousRequests limit of "+maxTotalSimultaneousRequests);
@@ -157,44 +167,48 @@ public class ipUseThrottleFilter implements Filter {
             s=equivalentAddresses.get(shortAddr); // map one short addr to another?
             if(s!=null)
                 shortAddr=s;
-            Integer icount=simultaneousRequestsByShortIPAddr.get(shortAddr);
-            if(icount!=null)
-                count=icount;
-            else
-                count=0;
+            if(ignorableAddresses.contains(shortAddr)) {
+                ignorable=true;
+            } else {
+                Integer icount=simultaneousRequestsByShortIPAddr.get(shortAddr);
+                if(icount!=null)
+                    count=icount;
+                else
+                    count=0;
 
-            int maxSimultaneousRequests=(maxTotalSimultaneousRequests-totalSimultaneousRequests)/4;
-            if(maxSimultaneousRequests==0)
-                maxSimultaneousRequests=1;
-            if(count>=maxSimultaneousRequests) {
-                log.error("IP addr "+shortAddr+".* has exceeded "+maxSimultaneousRequests+" simultaneous requests!");
-                log.error("maxTotalSimultaneousRequests="+maxTotalSimultaneousRequests);
-                log.error("totalSimultaneousRequests="+totalSimultaneousRequests);
-                for(String str:simultaneousRequests)
-                    log.error(str);
-//                ((HttpServletResponse)response).setStatus(HttpURLConnection.HTTP_TOO_MANY_REQUESTS); // someday
-                ((HttpServletResponse)response).setStatus(429); // too many requests
-                response.setContentType("text/html");
-                PrintWriter writer = response.getWriter();
-                writer.println( "<html><head><title>Too Many Requests</title></head><body><h1>Too Many Requests</h1>" );
-                writer.println( "You have exceeded the maximum simultaneous request value of "+maxSimultaneousRequests);
-                writer.println("<p>This message and your IP address have been logged and reported</p>");
-                if(contactInfo!=null)
-                    writer.println("<p>Contact "+contactInfo+" for more information</p>");
-                writer.println("</body></html>");
-                writer.close();
-                return;
+                int maxSimultaneousRequests=(maxTotalSimultaneousRequests-totalSimultaneousRequests)/4;
+                if(maxSimultaneousRequests==0)
+                    maxSimultaneousRequests=1;
+                if(count>=maxSimultaneousRequests) {
+                    log.error("IP addr "+shortAddr+".* has exceeded "+maxSimultaneousRequests+" simultaneous requests!");
+                    log.error("maxTotalSimultaneousRequests="+maxTotalSimultaneousRequests);
+                    log.error("totalSimultaneousRequests="+totalSimultaneousRequests);
+                    for(String str:simultaneousRequests)
+                        log.error(str);
+    //                ((HttpServletResponse)response).setStatus(HttpURLConnection.HTTP_TOO_MANY_REQUESTS); // someday
+                    ((HttpServletResponse)response).setStatus(429); // too many requests
+                    response.setContentType("text/html");
+                    PrintWriter writer = response.getWriter();
+                    writer.println( "<html><head><title>Too Many Requests</title></head><body><h1>Too Many Requests</h1>" );
+                    writer.println( "You have exceeded the maximum simultaneous request value of "+maxSimultaneousRequests);
+                    writer.println("<p>This message and your IP address have been logged and reported</p>");
+                    if(contactInfo!=null)
+                        writer.println("<p>Contact "+contactInfo+" for more information</p>");
+                    writer.println("</body></html>");
+                    writer.close();
+                    return;
+                }
+                simultaneousRequestsByShortIPAddr.put(shortAddr, count+1);
+                icount=totalRequests.get(shortAddr);
+                if(icount!=null)
+                    count=icount;
+                else
+                    count=0;
+                totalRequests.put(shortAddr, count+1);
+                totalSimultaneousRequests++;
+                transactionKey=new StringBuilder((new Date(System.currentTimeMillis())).toString()).append('|').append(shortAddr).append('|').append(((HttpServletRequest)request).getQueryString()).toString();
+                simultaneousRequests.add(transactionKey);
             }
-            simultaneousRequestsByShortIPAddr.put(shortAddr, count+1);
-            icount=totalRequests.get(shortAddr);
-            if(icount!=null)
-                count=icount;
-            else
-                count=0;
-            totalRequests.put(shortAddr, count+1);
-            totalSimultaneousRequests++;
-            transactionKey=new StringBuilder((new Date(System.currentTimeMillis())).toString()).append('|').append(shortAddr).append('|').append(((HttpServletRequest)request).getQueryString()).toString();
-            simultaneousRequests.add(transactionKey);
         }
 
         try {
@@ -202,15 +216,16 @@ public class ipUseThrottleFilter implements Filter {
             chain.doFilter(request, wrapper);
         }
         finally {
-            synchronized(simultaneousRequestsByShortIPAddr) {
-                totalSimultaneousRequests--;
-                simultaneousRequests.remove(transactionKey);
-                count=simultaneousRequestsByShortIPAddr.get(shortAddr);
-                if(count==1) // prune them from the table
-                    simultaneousRequestsByShortIPAddr.remove(shortAddr);
-                else
-                    simultaneousRequestsByShortIPAddr.put(shortAddr, count-1);
-            }
+            if(!ignorable)
+                synchronized(simultaneousRequestsByShortIPAddr) {
+                    totalSimultaneousRequests--;
+                    simultaneousRequests.remove(transactionKey);
+                    count=simultaneousRequestsByShortIPAddr.get(shortAddr);
+                    if(count==1) // prune them from the table
+                        simultaneousRequestsByShortIPAddr.remove(shortAddr);
+                    else
+                        simultaneousRequestsByShortIPAddr.put(shortAddr, count-1);
+                }
         }
 
         Calendar c=new GregorianCalendar();
