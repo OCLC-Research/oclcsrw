@@ -122,6 +122,8 @@
             <groupId>org.oclc.cql-java</groupId>
             <artifactId>cql-java</artifactId>
             <version>1.9</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/src/main/resources/cql-java-1.9.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
@@ -180,21 +182,6 @@
             <version>1.1</version>
         </dependency>
         <dependency>
-            <groupId>org.oclc.platform</groupId>
-            <artifactId>f4s-toolkit-statistics</artifactId>
-            <version>3.2.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.oclc.platform</groupId>
-            <artifactId>f4s-toolkit-security</artifactId>
-            <version>3.2.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.oclc.platform</groupId>
-            <artifactId>f4s-toolkit-core</artifactId>
-            <version>3.2.0</version>
-        </dependency>
-        <dependency>
           <groupId>org.apache.jena</groupId>
           <artifactId>apache-jena-libs</artifactId>
           <type>pom</type>
@@ -204,21 +191,6 @@
             <artifactId>slf4j-log4j12</artifactId>
             <version>1.7.12</version>
         </dependency>
-        <!--dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>1.7.12</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>jcl-over-slf4j</artifactId>
-            <version>1.7.12</version>
-        </dependency>
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-simple</artifactId>
-            <version>1.7.12</version>
-        </dependency-->
         <dependency>
             <groupId>commons-beanutils</groupId>
             <artifactId>commons-beanutils</artifactId>
