@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE urlrewrite PUBLIC "-//tuckey.org//DTD UrlRewrite 2.6//EN"
+        "http://tuckey.org/res/dtds/urlrewrite2.6.dtd">
+
+<!--
+
+    Configuration file for UrlRewriteFilter
+    http://tuckey.org/urlrewrite/
+
+-->
+<urlrewrite>
+    <rule>
+        <note> convert URI to a search </note>
+        <condition type="method">GET</condition>
+        <from>^/([a-z0-9]+)/$</from>
+        <to>/search/lcnaf?query=oai.identifier+exact+%22$1.xml%22</to>
+        <set name="service">APP</set>
+        </rule>
+
+    <rule>
+        <note>Send a 303 (SC_SEE_ALSO_REDIRECT) for Real World Objects</note>
+        <from>^/([a-z0-9]+)$</from>
+        <to type="seeother-redirect">$1/</to>
+        </rule>
+
+    <rule>
+        <note>Default rule when no other content-type was asked for</note>
+        <from>^/$</from>
+        <to>index.html</to>
+        </rule>
+        
+    <rule>
+        <note>
+            convert URI + RDF record request into a search
+            </note>
+        <condition type="method">GET</condition>
+        <from>^/([a-z0-9]+)/rdf.xml$</from>
+        <set name="service">APP</set>
+        <to>/search/lcnaf?query=oai.identifier+exact+%22$1.xml%22&amp;httpAccept=application/rdf%2bxml</to>
+        </rule>
+    </urlrewrite>   

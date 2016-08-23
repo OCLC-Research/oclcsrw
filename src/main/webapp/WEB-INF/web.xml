@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+	 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	 xsi:schemaLocation="http://java.sun.com/xml/ns/j2ee http://java.sun.com/xml/ns/j2ee/web-app_2_4.xsd"
+	 version="2.4">
+  <display-name>SRW/U Service</display-name>
+  <servlet>
+    <servlet-name>SRWServlet</servlet-name>
+    <!--display-name>SRW/U Servlet</display-name-->
+    <servlet-class>
+        ORG.oclc.os.SRW.SRWServlet
+    </servlet-class>
+    <!--init-param>
+      <param-name>portNumber</param-name>
+      <param-value>8080</param-value>
+      </init-param-->
+    <!--init-param>
+      <param-name>PropertiesFile</param-name>
+      <param-value>webapps/SRW/SRWServer.propss</param-value>
+    </init-param-->
+    <load-on-startup>4</load-on-startup>
+  </servlet>
+
+  <servlet>
+    <servlet-name>SRUServerTesterServlet</servlet-name>
+    <!--display-name>SRU Server Tester Servlet</display-name-->
+    <servlet-class>ORG.oclc.os.SRW.SRUServerTesterServlet</servlet-class>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>SRWServlet</servlet-name>
+    <url-pattern>/search/*</url-pattern>
+  </servlet-mapping>
+
+  <servlet-mapping>
+    <servlet-name>SRUServerTesterServlet</servlet-name>
+    <url-pattern>/test/SRUServerTester</url-pattern>
+  </servlet-mapping>
+
+  <filter>
+    <filter-name>UrlRewriteFilter</filter-name>
+    <filter-class>org.tuckey.web.filters.urlrewrite.UrlRewriteFilter</filter-class>
+
+    <!-- set the amount of seconds the conf file will be checked for reload can be
+         a valid integer (0 denotes check every time, empty/not set denotes no reload check) -->
+    <init-param>
+      <param-name>confReloadCheckInterval</param-name>
+      <param-value>300</param-value>
+      </init-param>
+
+    <!-- sets up log level (will be logged to context log) can be: TRACE, DEBUG,
+         INFO (default), WARN, ERROR, FATAL, log4j, commons, sysout:{level}
+        (ie, sysout:DEBUG) if you are having trouble using normal levels use sysout:DEBUG -->
+    <init-param>
+      <param-name>logLevel</param-name>
+      <!--param-value>sysout:DEBUG</param-value-->
+      <param-value>LOG4J</param-value>
+      </init-param>
+
+    <!-- you can disable status page if desired can be: true, false (default true) -->
+    <init-param>
+      <param-name>statusEnabled</param-name>
+      <param-value>true</param-value>
+      </init-param>
+
+    <!-- you can change status path so that it does not conflict with your installed
+         apps (note, defaults to /rewrite-status) note, must start with / -->
+    <init-param>
+      <param-name>statusPath</param-name>
+      <param-value>/rewrite-status</param-value>
+      </init-param>
+    </filter>
+
+  <filter-mapping>
+    <filter-name>UrlRewriteFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+
+  <!-- currently the W3C havent settled on a media type for WSDL;
+    http://www.w3.org/TR/2003/WD-wsdl12-20030303/#ietf-draft
+    for now we go with the basic 'it's XML' response -->
+  <mime-mapping>
+    <extension>wsdl</extension>
+     <mime-type>text/xml</mime-type>
+  </mime-mapping>
+  
+
+  <mime-mapping>
+    <extension>xsd</extension>
+    <mime-type>text/xml</mime-type>
+  </mime-mapping>
+</web-app>
