@@ -37,6 +37,7 @@
                 <version>2.3</version>
                 <configuration>
                     <failOnMissingWebXml>false</failOnMissingWebXml>
+                    <warName>SRW</warName>
                 </configuration>
             </plugin>
             <plugin>
@@ -144,7 +145,7 @@
             <artifactId>cql-java</artifactId>
             <version>1.9</version>
             <scope>system</scope>
-            <systemPath>${basedir}/src/main/resources/cql-java-1.9.jar</systemPath>
+            <systemPath>${basedir}/src/main/webapp/WEB-INF/lib/cql-java-1.9.jar</systemPath>
         </dependency>
         <dependency>
             <groupId>junit</groupId>
