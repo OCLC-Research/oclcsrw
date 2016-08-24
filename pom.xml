@@ -158,8 +158,8 @@
             <version>51.2</version>
         </dependency>
         <dependency>
-            <groupId>org.ostermiller.utils</groupId>
-            <artifactId>ostermillerutils</artifactId>
+            <groupId>org.ostermiller</groupId>
+            <artifactId>utils</artifactId>
             <version>1.07.00</version>
         </dependency>
         <dependency>
