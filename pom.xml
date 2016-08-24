@@ -135,6 +135,11 @@
             <version>1.4</version>
         </dependency>
         <dependency>
+            <groupId>org.apache.axis</groupId>
+            <artifactId>axis-jaxrpc</artifactId>
+            <version>1.4</version>
+        </dependency>
+        <dependency>
             <groupId>org.oclc.cql-java</groupId>
             <artifactId>cql-java</artifactId>
             <version>1.9</version>
@@ -155,7 +160,7 @@
         <dependency>
             <groupId>org.ostermiller.utils</groupId>
             <artifactId>ostermillerutils</artifactId>
-            <version>1.05.00</version>
+            <version>1.07.00</version>
         </dependency>
         <dependency>
             <groupId>xalan</groupId>
