@@ -1197,7 +1197,7 @@ public abstract class SRWDatabase {
         DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
         dbf.setNamespaceAware(true);
         try {
-            dbf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+//            dbf.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
             docb=dbf.newDocumentBuilder();
         } catch (ParserConfigurationException e) {
             log.error(e, e);
