@@ -13,10 +13,6 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
-    <scm>
-        <connection>scm:svn:http://svn.dev.oclc.org/svn/SRW/trunk</connection>
-    </scm>
-
     <build>
         <resources>
             <resource>
@@ -141,6 +137,11 @@
             <version>1.4</version>
         </dependency>
         <dependency>
+            <groupId>wsdl4j</groupId>
+            <artifactId>wsdl4j</artifactId>
+            <version>1.4</version>
+        </dependency>
+        <dependency>
             <groupId>org.oclc.cql-java</groupId>
             <artifactId>cql-java</artifactId>
             <version>1.9</version>
@@ -258,19 +259,6 @@
                     <value>true</value>
                 </property>
             </activation>
-            <distributionManagement>
-                <repository>
-                    <id>releases</id>
-                    <url>${releasesRepoUrl}</url>
-                </repository>
-            </distributionManagement>
         </profile>
     </profiles>
-
-    <distributionManagement>
-        <snapshotRepository>
-            <id>snapshots</id>
-            <url>${snapshotsRepoUrl}</url>
-        </snapshotRepository>
-    </distributionManagement>
 </project>
