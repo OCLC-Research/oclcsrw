@@ -6,12 +6,15 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class MediaRangeSpec {
-	private final static Pattern tokenPattern;
-	private final static Pattern parameterPattern;
-	private final static Pattern mediaRangePattern;
-	private final static Pattern qValuePattern;
+    protected static Log log=LogFactory.getLog(MediaRangeSpec.class.getName());
+	private final static Pattern TOKEN_PATTERN;
+	private final static Pattern PARAMETER_PATTERN;
+	private final static Pattern MEDIA_RANGE_PATTERN;
+	private final static Pattern Q_VALUE_PATTERN;
 	static {
 		// See RFC 2616, section 2.2
 		String token = "[\\x20-\\x7E&&[^()<>@,;:\\\"/\\[\\]?={} ]]+";
@@ -27,10 +30,10 @@ public class MediaRangeSpec {
 				"((?:\\s*" + parameter + ")*)" +
 				"(?:\\s*" + quality + ")?" +
 				"((?:\\s*" + parameter + ")*)";
-		tokenPattern = Pattern.compile(token);
-		parameterPattern = Pattern.compile(parameter);
-		mediaRangePattern = Pattern.compile(regex);
-		qValuePattern = Pattern.compile(qualityValue);
+		TOKEN_PATTERN = Pattern.compile(token);
+		PARAMETER_PATTERN = Pattern.compile(parameter);
+		MEDIA_RANGE_PATTERN = Pattern.compile(regex);
+		Q_VALUE_PATTERN = Pattern.compile(qualityValue);
 	}
 
 	/**
@@ -49,7 +52,7 @@ public class MediaRangeSpec {
 	 * Unlike simple media types, media ranges may include wildcards.
 	 */
 	public static MediaRangeSpec parseRange(String mediaRange) {
-		Matcher m = mediaRangePattern.matcher(mediaRange);
+		Matcher m = MEDIA_RANGE_PATTERN.matcher(mediaRange);
 		if (!m.matches()) {
 			return null;
 		}
@@ -57,7 +60,7 @@ public class MediaRangeSpec {
 		String subtype = m.group(2).toLowerCase();
 		String unparsedParameters = m.group(3);
 		String qValue = m.group(7);
-		m = parameterPattern.matcher(unparsedParameters);
+		m = PARAMETER_PATTERN.matcher(unparsedParameters);
 		if ("*".equals(type) && !"*".equals(subtype)) {
 			return null;
 		}
@@ -68,7 +71,7 @@ public class MediaRangeSpec {
 			parameterValues.add((m.group(3) == null) ? m.group(2) : unescape(m.group(3)));
 		}
 		double quality = 1.0;		
-		if (qValue != null && qValuePattern.matcher(qValue).matches()) {
+		if (qValue != null && Q_VALUE_PATTERN.matcher(qValue).matches()) {
 			try {
 				quality = Double.parseDouble(qValue);
 			} catch (NumberFormatException ex) {
@@ -84,9 +87,16 @@ public class MediaRangeSpec {
 	 */
 	public static List<MediaRangeSpec> parseAccept(String s) {
 		List<MediaRangeSpec> result = new ArrayList<MediaRangeSpec>();
-		Matcher m = mediaRangePattern.matcher(s);
+		Matcher m = MEDIA_RANGE_PATTERN.matcher(s);
+                MediaRangeSpec pr;
+                String group;
 		while (m.find()) {
-			result.add(parseRange(m.group()));
+                    group = m.group();
+                    pr = parseRange(group);
+                    if(pr==null) {
+                        log.error("null MediaRangeSpec generated from accept="+s+", group="+group);
+                    }
+			result.add(pr);
 		}
 		return result;
 	}
@@ -126,8 +136,8 @@ public class MediaRangeSpec {
 			result.append(";");
 			result.append(parameterNames.get(i));
 			result.append("=");
-			String value = (String) parameterValues.get(i);
-			if (tokenPattern.matcher(value).matches()) {
+			String value = parameterValues.get(i);
+			if (TOKEN_PATTERN.matcher(value).matches()) {
 				result.append(value);
 			} else {
 				result.append("\"");
@@ -150,7 +160,7 @@ public class MediaRangeSpec {
 		return mediaType;
 	}
 	
-	public List getParameterNames() {
+	public List<String> getParameterNames() {
 		return parameterNames;
 	}
 	
@@ -187,7 +197,7 @@ public class MediaRangeSpec {
         if (range.getParameterNames().isEmpty()) return 3;
         int result = 3;
         for (int i = 0; i < range.getParameterNames().size(); i++) {
-            String name = (String) range.getParameterNames().get(i);
+            String name = range.getParameterNames().get(i);
             String value = range.getParameter(name);
             if (!value.equals(getParameter(name))) return 0;
             result++;

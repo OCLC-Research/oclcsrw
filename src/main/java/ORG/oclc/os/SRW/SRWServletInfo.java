@@ -30,8 +30,9 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -41,9 +42,9 @@ import java.util.Locale;
 import java.util.Properties;
 import java.util.StringTokenizer;
 import javax.servlet.ServletConfig;
+import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
 import org.apache.axis.Message;
 import org.apache.axis.MessageContext;
@@ -55,28 +56,28 @@ import org.apache.commons.logging.LogFactory;
  * @author  levan
  */
 public class SRWServletInfo {
-    public static final boolean isDebug=false;
     public static Log log=LogFactory.getLog(SRWServletInfo.class);
-    public static HashMap<String, String> realXsls=new HashMap<String, String>();
-    public HashMap<String, Normalizer.Form> normalForm=new HashMap<String, Normalizer.Form>();
-    public HashMap<String, String> mediaTypes=new HashMap<String, String>();
-    public HashMap<String, Transformer> transformers=new HashMap<String, Transformer>();
+    public static HashMap<String, String> realXsls=new HashMap<>();
+    public HashMap<String, Normalizer.Form> normalForm=new HashMap<>();
+    public HashMap<String, String> mediaTypes=new HashMap<>();
+    public HashMap<String, Object> templatesOrTransformers=new HashMap<>();
     public static String srwHome, tomcatHome, webappHome;
     protected HashMap<String, String>
-                          nameSpaces=new HashMap<String, String>(),
-                          schemas=new HashMap<String, String>();
+                          nameSpaces=new HashMap<>(),
+                          schemas=new HashMap<>();
 
     static private boolean madeIndexDotHtmlAlready=false;
 
     private boolean      makeIndexDotHtml=false;
-    private final HashMap<String, String> extensions=new HashMap<String, String>(), namespaces=new HashMap<String, String>();
-    public  HashMap<String, String> dbnames=new HashMap<String, String>();
+    private final HashMap<String, String> extensions=new HashMap<>(), namespaces=new HashMap<>();
+    public  HashMap<String, String> dbnames=new HashMap<>();
     public int           pathInfoIndex=100;
     private final Properties   serverProperties=new Properties();
     public String        addressInHeader=null, defaultDatabase,
                          indexDotHtmlLocation=null, propsfileName;
-    public ArrayList<DbEntry> dbList=new ArrayList<DbEntry>();
+    public ArrayList<DbEntry> dbList=new ArrayList<>();
     public ContentTypeNegotiator conneg;
+    private final String defaultDatabaseNotSpecified="default.database not specified in properties file";
 
     public SRWServletInfo() {
     }
@@ -125,11 +126,12 @@ public class SRWServletInfo {
                         "db."+dbName+".configuration");
                     if(fileName!=null)
                         try {
-                            InputStream is=Utilities.openInputStream(
-                                fileName, dbHome, srwHome);
-                            Properties dbProperties=new Properties();
-                            dbProperties.load(is);
-                            is.close();
+                            Properties dbProperties;
+                            try (InputStream is = Utilities.openInputStream(
+                                    fileName, dbHome, srwHome)) {
+                                dbProperties = new Properties();
+                                dbProperties.load(is);
+                            }
                             description=dbProperties.getProperty("databaseInfo.description");
                         }
                         catch(FileNotFoundException e) {
@@ -151,10 +153,11 @@ public class SRWServletInfo {
                 remote=t.substring(7, t.length()-14);
                 try {
                     String remotePath=properties.getProperty("remote."+remote+".path");
-                    InputStream is=new URL(properties.getProperty(t)).openStream();
-                    Properties srwProperties=new Properties();
-                    srwProperties.load(is);
-                    is.close();
+                    Properties srwProperties;
+                    try (InputStream is = new URL(properties.getProperty(t)).openStream()) {
+                        srwProperties = new Properties();
+                        srwProperties.load(is);
+                    }
                     buildDbList(srwProperties, dbList, dbnames, remotePath, remote, justDbNames);
                 }
                 catch(IOException e) {
@@ -286,8 +289,31 @@ public class SRWServletInfo {
         log.info("Got an explain request for database "+dbname);
         SRWDatabase db=SRWDatabase.getDB(dbname, serverProperties, request.getContextPath(), request);
         if(db==null) {
-            log.error("Non-existant database "+dbname+" in properties file \""+propsfileName+"\"");
-            response.setStatus(404);
+            if(dbname.equals(defaultDatabaseNotSpecified)) {
+                log.error("Non-existant database "+dbname);
+                log.error("requesting url was: "+request.getRequestURL().toString());
+                log.error(new Exception("called from"));
+                response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
+                response.setContentType("text/html");
+                response.setHeader("srwFailReason", "nonExistantDatabase");
+                if (!"HEAD".equals(request.getMethod())) {
+                    try (ServletOutputStream sos = response.getOutputStream()) {
+                        sos.println("<html><head><title>Database not found: \""+dbname+"\"</title></head><body><h2>404: Database not found: \""+dbname+"\"</h2><hr/>OCLC SRW/SRU Server</body></html>");
+                    }
+                }
+            } else {
+                log.error("Unavailable database "+dbname);
+                log.error("requesting url was: "+request.getRequestURL().toString());
+                log.error(new Exception("called from"));
+                response.setStatus(HttpURLConnection.HTTP_BAD_GATEWAY);
+                response.setContentType("text/html");
+                response.setHeader("srwFailReason", "unavailableDatabase");
+                if (!"HEAD".equals(request.getMethod())) {
+                    try (ServletOutputStream sos = response.getOutputStream()) {
+                        sos.println("<html><head><title>Database unavailable: \""+dbname+"\"</title></head><body><h2>502: Database unavailable: \""+dbname+"\"</h2><hr/>OCLC SRW/SRU Server</body></html>");
+                    }
+                }
+            }
             return true;
         }
         if(recordPacking==null) {
@@ -295,33 +321,33 @@ public class SRWServletInfo {
         }
         if(stylesheet==null)
             stylesheet=db.explainStyleSheet;
-        PrintWriter    writer = response.getWriter();
-        response.setContentType("text/xml");
-        try{
-            writeXmlHeader(writer, msgContext, request, stylesheet);
-            writer.write("<SRW:explainResponse "+
-            "xmlns:SRW=\"http://www.loc.gov/zing/srw/\">\n");
-            writer.write("  <SRW:version>1.1</SRW:version>\n");
-            writer.write("  <SRW:record>\n");
-            writer.write("    <SRW:recordSchema>http://explain.z3950.org/dtd/2.0/</SRW:recordSchema>\n");
-            writer.write("    <SRW:recordPacking>"+recordPacking+"</SRW:recordPacking>\n");
-            writer.write("    <SRW:recordData>\n");
-            String explainRecord=db.getExplainRecord(request);
-            if(explainRecord==null) {
-                explainRecord=db.getExplainRecord(request);
+        try(PrintWriter writer = response.getWriter()) {
+            response.setContentType("text/xml");
+            try{
+                writeXmlHeader(writer, msgContext, request, stylesheet);
+                writer.write("<SRW:explainResponse "+
+                        "xmlns:SRW=\"http://www.loc.gov/zing/srw/\">\n");
+                writer.write("  <SRW:version>1.1</SRW:version>\n");
+                writer.write("  <SRW:record>\n");
+                writer.write("    <SRW:recordSchema>http://explain.z3950.org/dtd/2.0/</SRW:recordSchema>\n");
+                writer.write("    <SRW:recordPacking>"+recordPacking+"</SRW:recordPacking>\n");
+                writer.write("    <SRW:recordData>\n");
+                String explainRecord=db.getExplainRecord(request);
+                if(explainRecord==null) {
+                    explainRecord=db.getExplainRecord(request);
+                }
+                if(recordPacking.equals("string"))
+                    Utilities.writeEncoded(writer, explainRecord);
+                else
+                    writer.write(explainRecord);
+                writer.write("      </SRW:recordData>\n");
+                writer.write("    </SRW:record>\n");
+                writer.write("  </SRW:explainResponse>\n");
             }
-            if(recordPacking.equals("string"))
-                Utilities.writeEncoded(writer, explainRecord);
-            else
-                writer.write(explainRecord);
-            writer.write("      </SRW:recordData>\n");
-            writer.write("    </SRW:record>\n");
-            writer.write("  </SRW:explainResponse>\n");
+            catch(IOException e) {
+                log.error(e, e);
+            }
         }
-        catch(IOException e) {
-            log.error(e, e);
-        }
-        writer.close();
         log.info("Finished the explain response for database "+dbname);
         SRWDatabase.putDb(dbname, db);
         return true;
@@ -384,7 +410,7 @@ public class SRWServletInfo {
             defaultDatabase=serverProperties.getProperty("default.database");
             if(defaultDatabase==null)
                 defaultDatabase=
-                    "default.database not specified in properties file";
+                    defaultDatabaseNotSpecified;
             log.info("default.database="+defaultDatabase);
             indexDotHtmlLocation=serverProperties.getProperty("index.html");
             if(indexDotHtmlLocation==null)
@@ -418,7 +444,7 @@ public class SRWServletInfo {
                         if(t.startsWith("db.")) {
                             offset=t.indexOf(".", 3);
                             dbname=t.substring(3, offset);
-                            if(list.indexOf(", "+dbname+",")==-1) { // not yet in list
+                            if(!list.contains(", "+dbname+",")) { // not yet in list
                                 list=list+" "+dbname+",";
                             }
                         }
@@ -463,21 +489,15 @@ public class SRWServletInfo {
                     vs=conneg.addVariant(mimeType);
                     mediaType=vs.getMediaType().getMediaType();
                     try {
-                        Transformer trans = Utilities.addTransformer(mediaType,
+                        Object trans = Utilities.addTransformer(mediaType,
                                 serverProperties.getProperty(name+".styleSheet"),
-                                srwHome, null, null, serverProperties, propsfileName);
+                                srwHome, null, null, serverProperties, propsfileName, name);
                         if(trans!=null) {
-                            transformers.put(mediaType, trans);
+                            templatesOrTransformers.put(mediaType, trans);
                         }
                         while(st.hasMoreTokens())
                             vs.addAliasMediaType(st.nextToken());
-                    } catch (FileNotFoundException e) {
-                        log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
-                        log.error(e, e);
-                    } catch (TransformerConfigurationException e) {
-                        log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
-                        log.error(e, e);
-                    } catch (UnsupportedEncodingException e) {
+                    } catch (FileNotFoundException | TransformerConfigurationException | UnsupportedEncodingException e) {
                         log.error("Unable to add stylesheet "+serverProperties.getProperty(name+".styleSheet")+", stylesheet ignored");
                         log.error(e, e);
                     }
@@ -506,11 +526,7 @@ public class SRWServletInfo {
             }
             log.info("SRWServletInfo initialization complete");
         }
-        catch(IOException e) {
-            log.error(e, e);
-        } catch (NumberFormatException e) {
-            log.error(e, e);
-        } catch (InstantiationException e) {
+        catch(IOException | NumberFormatException | InstantiationException e) {
             log.error(e, e);
         }
     }
@@ -522,60 +538,60 @@ public class SRWServletInfo {
         madeIndexDotHtmlAlready=true;
         String      path=request.getContextPath()+request.getServletPath();
         try {
-            PrintStream ps=new PrintStream(new FileOutputStream(indexDotHtmlLocation));
-            log.debug("writing index.html to: "+indexDotHtmlLocation);
-            ps.println("<!doctype html public \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">");
-            ps.println("<html>");
-            ps.println("<head>");
-            ps.println("<title>SRW/U Databases</title>");
-            ps.println("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />");
-            ps.println("<link href=\"http://www.oclc.org/common/css/basic_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
-            ps.println("<link href=\"http://www.oclc.org/common/css/researchproject_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
-            ps.println("<style type=\"text/css\">");
-            ps.println("<!--");
-            ps.println("table.layout { border: none; margin: 0; padding: 0; width: 100%; }");
-            ps.println("table.layout td { border: none; margin: 0; padding: 0; width: 50%; }");
-            ps.println("table.formtable th, table.formtable td { border-top: 1px solid #999; border-left: 1px solid #999; color: #333; padding: 4px; text-align: left; vertical-align: top; }");
-            ps.println("input.button { margin: 0; }");
-            ps.println("-->");
-            ps.println("</style>");
-            ps.println("</head>");
-            ps.println("<body>");
-            ps.println("<div align=\"center\">");
-            ps.println("<table cellspacing=\"0\" id=\"bnrResearch\">");
-            ps.println("<tr>");
-            ps.println("<td id=\"tdResearch\"><a href=\"http://www.oclc.org/research/\">A Project of OCLC Research</a></td>");
-            ps.println("<td id=\"tdOclc\"><a href=\"http://www.oclc.org/\">OCLC Online Computer Library Center</a></td>");
-            ps.println("</tr>");
-            ps.println("<tr>");
-            ps.println("<td id=\"tdProject\"><h2><a href=\"index.html\">SRW/U Databases</a></h2></td>");
-            ps.println("<td id=\"tdLogo\"><a href=\"http://www.oclc.org/research/software/srw\"><img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://www.oclc.org/research/images/badges/oclc_srwu.gif\"/></a></td>");
-            ps.println("</tr>");
-            ps.println("</table>");
-            ps.println("</div>");
-            ps.println("<table class=\"formtable\">");
-            if(dbList.isEmpty())
-                buildDbList(properties, dbList, dbnames, path, false);
-            Object[] dbArray=this.dbList.toArray();
-            Arrays.sort(dbArray);
-            DbEntry de;
-            for (Object dbArray1 : dbArray) {
-                de = (DbEntry) dbArray1;
-                ps.print("<tr><th><a href=\""+de.getPath()+"/"+de.getName()+"\">");
-                if(de.getHost().length()>0)
-                    ps.print(de.getHost()+": ");
-                ps.print(de.getName()+"</a></th>");
-                if(de.getDescription()!=null) {
-                    ps.println("<td>"+de.getDescription()+"</td>");
+            try (PrintStream ps = new PrintStream(new FileOutputStream(indexDotHtmlLocation))) {
+                log.debug("writing index.html to: "+indexDotHtmlLocation);
+                ps.println("<!doctype html public \"-//W3C//DTD HTML 4.01 Transitional//EN\" \"http://www.w3.org/TR/html4/loose.dtd\">");
+                ps.println("<html>");
+                ps.println("<head>");
+                ps.println("<title>SRW/U Databases</title>");
+                ps.println("<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />");
+                ps.println("<link href=\"http://www.oclc.org/common/css/basic_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
+                ps.println("<link href=\"http://www.oclc.org/common/css/researchproject_oclc.css\" rel=\"stylesheet\" type=\"text/css\" />");
+                ps.println("<style type=\"text/css\">");
+                ps.println("<!--");
+                ps.println("table.layout { border: none; margin: 0; padding: 0; width: 100%; }");
+                ps.println("table.layout td { border: none; margin: 0; padding: 0; width: 50%; }");
+                ps.println("table.formtable th, table.formtable td { border-top: 1px solid #999; border-left: 1px solid #999; color: #333; padding: 4px; text-align: left; vertical-align: top; }");
+                ps.println("input.button { margin: 0; }");
+                ps.println("-->");
+                ps.println("</style>");
+                ps.println("</head>");
+                ps.println("<body>");
+                ps.println("<div align=\"center\">");
+                ps.println("<table cellspacing=\"0\" id=\"bnrResearch\">");
+                ps.println("<tr>");
+                ps.println("<td id=\"tdResearch\"><a href=\"http://www.oclc.org/research/\">A Project of OCLC Research</a></td>");
+                ps.println("<td id=\"tdOclc\"><a href=\"http://www.oclc.org/\">OCLC Online Computer Library Center</a></td>");
+                ps.println("</tr>");
+                ps.println("<tr>");
+                ps.println("<td id=\"tdProject\"><h2><a href=\"index.html\">SRW/U Databases</a></h2></td>");
+                ps.println("<td id=\"tdLogo\"><a href=\"http://www.oclc.org/research/software/srw\"><img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://www.oclc.org/research/images/badges/oclc_srwu.gif\"/></a></td>");
+                ps.println("</tr>");
+                ps.println("</table>");
+                ps.println("</div>");
+                ps.println("<table class=\"formtable\">");
+                if(dbList.isEmpty())
+                    buildDbList(properties, dbList, dbnames, path, false);
+                Object[] dbArray=this.dbList.toArray();
+                Arrays.sort(dbArray);
+                DbEntry de;
+                for (Object dbArray1 : dbArray) {
+                    de = (DbEntry) dbArray1;
+                    ps.print("<tr><th><a href=\""+de.getPath()+"/"+de.getName()+"\">");
+                    if(de.getHost().length()>0)
+                        ps.print(de.getHost()+": ");
+                    ps.print(de.getName()+"</a></th>");
+                    if(de.getDescription()!=null) {
+                        ps.println("<td>"+de.getDescription()+"</td>");
+                    }
                 }
+                ps.println("</table>");
+                ps.println("<a href=\"http://www.oclc.org/research/software/srw\">");
+                ps.println("<img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://oaweb4server:8001/DesignDept/sandbox/osborne/badges/badge_srwu.gif\"/></p>");
+                ps.println("</a>");
+                ps.println("</body>");
+                ps.println("</html>");
             }
-            ps.println("</table>");
-            ps.println("<a href=\"http://www.oclc.org/research/software/srw\">");
-            ps.println("<img height=\"15\" width=\"80\" alt=\"Powered by OCLC SRW/U\" src=\"http://oaweb4server:8001/DesignDept/sandbox/osborne/badges/badge_srwu.gif\"/></p>");
-            ps.println("</a>");
-            ps.println("</body>");
-            ps.println("</html>");
-            ps.close();
         }
         catch(FileNotFoundException e){
             log.error(e,e);
@@ -584,7 +600,7 @@ public class SRWServletInfo {
     
     public boolean setSRWStuff(final HttpServletRequest request,
       final HttpServletResponse response, final MessageContext msgContext) 
-      throws org.apache.axis.AxisFault {
+      throws org.apache.axis.AxisFault, IOException {
         log.debug("entering SRWServletInfo.setSRWStuff");
         String databaseURL=request.getRequestURL().toString();
         String contextPath=request.getContextPath(), dbname=getDBName(request);
@@ -596,9 +612,31 @@ public class SRWServletInfo {
 
         SRWDatabase db=SRWDatabase.getDB(dbname, serverProperties, contextPath, request);
         if(db==null) {
-            log.error("Non-existant database "+dbname);
-            log.error("requesting url was: "+request.getRequestURL().toString());
-            response.setStatus(404);
+            if(dbname.equals(defaultDatabaseNotSpecified)) {
+                log.error("Non-existant database "+dbname);
+                log.error("requesting url was: "+request.getRequestURL().toString());
+                log.error(new Exception("called from"));
+                response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
+                response.setContentType("text/html");
+                response.setHeader("srwFailReason", "nonExistantDatabase");
+                if (!"HEAD".equals(request.getMethod())) {
+                    try (ServletOutputStream sos = response.getOutputStream()) {
+                        sos.println("<html><head><title>Database not found: \""+dbname+"\"</title></head><body><h2>404: Database not found: \""+dbname+"\"</h2><hr/>OCLC SRW/SRU Server</body></html>");
+                    }
+                }
+            } else {
+                log.error("Unavailable database "+dbname);
+                log.error("requesting url was: "+request.getRequestURL().toString());
+                log.error(new Exception("called from"));
+                response.setStatus(HttpURLConnection.HTTP_BAD_GATEWAY);
+                response.setContentType("text/html");
+                response.setHeader("srwFailReason", "unavailableDatabase");
+                if (!"HEAD".equals(request.getMethod())) {
+                    try (ServletOutputStream sos = response.getOutputStream()) {
+                        sos.println("<html><head><title>Database unavailable: \""+dbname+"\"</title></head><body><h2>502: Database unavailable: \""+dbname+"\"</h2><hr/>OCLC SRW/SRU Server</body></html>");
+                    }
+                }
+            }
             return false;
         }
         db.getExplainRecord(request);
@@ -639,7 +677,7 @@ public class SRWServletInfo {
       final MessageContext msgContext, final HttpServletRequest req,
       final String defaultXsl) {
         try {
-            sos.write(getXmlHeaders(req, defaultXsl).toString().getBytes(Charset.forName("UTF-8")));
+            sos.write(getXmlHeaders(req, defaultXsl).toString().getBytes(StandardCharsets.UTF_8));
         }
         catch(IOException e){}
     }

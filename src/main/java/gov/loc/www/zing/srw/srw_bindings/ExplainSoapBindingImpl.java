@@ -18,8 +18,12 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.axis.message.MessageElement;
 import ORG.oclc.os.SRW.SRWDatabase;
+import java.io.IOException;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.soap.SOAPException;
 import org.w3c.dom.Document;
 import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 
 public class ExplainSoapBindingImpl implements gov.loc.www.zing.srw.interfaces.ExplainPort{
     Log log=LogFactory.getLog(ExplainSoapBindingImpl.class);
@@ -44,7 +48,7 @@ public class ExplainSoapBindingImpl implements gov.loc.www.zing.srw.interfaces.E
         }
         if(!recordPacking.equals("xml") &&
           !recordPacking.equals("string")) {
-            return db.diagnostic(71, recordPacking, response);
+            return SRWDatabase.diagnostic(71, recordPacking, response);
         }
         try {
             if(recordPacking.equals("xml")) {
@@ -67,7 +71,16 @@ public class ExplainSoapBindingImpl implements gov.loc.www.zing.srw.interfaces.E
             record.setRecordData(frag);
             response.setRecord(record);
         }
-        catch(Exception e) {
+        catch(ParserConfigurationException e) {
+            log.info(e, e);
+            return null;
+        } catch (SAXException e) {
+            log.info(e, e);
+            return null;
+        } catch (IOException e) {
+            log.info(e, e);
+            return null;
+        } catch (SOAPException e) {
             log.info(e, e);
             return null;
         }

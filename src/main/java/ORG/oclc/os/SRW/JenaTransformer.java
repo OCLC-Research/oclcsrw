@@ -3,11 +3,10 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-
 package ORG.oclc.os.SRW;
 
-import java.io.BufferedReader;
-import java.io.IOException;
+import com.hp.hpl.jena.rdf.model.Model;
+import com.hp.hpl.jena.rdf.model.ModelFactory;
 import java.util.Properties;
 import javax.xml.transform.ErrorListener;
 import javax.xml.transform.Result;
@@ -16,46 +15,42 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.URIResolver;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
-import net.sf.json.JSON;
-import net.sf.json.xml.XMLSerializer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-/**b
+
+/**
  *
  * @author levan
  */
-public class xml2jsonTransformer extends DatabaseRecordTransformer {
-    private static final Log LOG=LogFactory.getLog(xml2jsonTransformer.class);
-
+public class JenaTransformer extends DatabaseRecordTransformer {
+    private String language;
+    
+    @Override
+    public void init(String prefix, Properties properties) {
+        language=properties.getProperty(prefix+".JenaTransformer.language");
+        if(language==null)
+            throw new IllegalArgumentException("missing mandator parameter: "+
+                    prefix+".JenaTransformer.language");
+    }
+    
     @Override
     public void transform(Source xmlSource, Result outputTarget) throws TransformerException {
-        StreamSource source=(StreamSource) xmlSource;
-        BufferedReader br=new BufferedReader(source.getReader());
-        StringBuilder sb=new StringBuilder();
-        String line;
+        Model model=ModelFactory.createDefaultModel();
         try {
-            while((line=br.readLine())!=null)
-                sb.append(line);
-        } catch (IOException ex) {
-            throw new TransformerException(ex);
-        }
-        String xmlRecord=sb.toString();
-        if(LOG.isDebugEnabled())
-            LOG.debug("xmlSource: "+xmlRecord);
-        XMLSerializer xmlSerializer = new XMLSerializer();
-        try {
-            JSON json=xmlSerializer.read(xmlRecord);
-            StreamResult sr=(StreamResult) outputTarget;
-            json.write(sr.getWriter());
-            if(LOG.isDebugEnabled())
-                LOG.debug("convertedJSON: "+sr.toString());
-        }
-        catch(Exception e) {
-            LOG.error("Unable to transform to JSON: "+xmlRecord);
-            throw new TransformerException(e);
+            if(((StreamSource)xmlSource).getReader()!=null)
+                model.read(((StreamSource)xmlSource).getReader(), null);
+            else
+                model.read(((StreamSource)xmlSource).getInputStream(), null);
+            if(((StreamResult)outputTarget).getWriter()!=null)
+                model.write(((StreamResult)outputTarget).getWriter(), language);
+            else
+                model.write(((StreamResult)outputTarget).getOutputStream(), language);
+        } finally {
+            model.close();
         }
     }
 
+    @Override
+    public void reset() {}
+    
     @Override
     public void setParameter(String name, Object value) {
         throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.

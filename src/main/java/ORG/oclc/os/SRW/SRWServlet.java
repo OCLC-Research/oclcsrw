@@ -26,6 +26,7 @@ package ORG.oclc.os.SRW;
 import de.fuberlin.wiwiss.pubby.negotiation.ContentTypeNegotiator;
 import de.fuberlin.wiwiss.pubby.negotiation.MediaRangeSpec;
 import gov.loc.www.zing.srw.DiagnosticsType;
+import gov.loc.www.zing.srw.RecordType;
 import gov.loc.www.zing.srw.RecordsType;
 import gov.loc.www.zing.srw.SearchRetrieveResponseType;
 import gov.loc.www.zing.srw.diagnostic.DiagnosticType;
@@ -33,7 +34,7 @@ import java.io.*;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Enumeration;
@@ -54,12 +55,16 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.xml.soap.SOAPException;
 import javax.xml.transform.Source;
+import javax.xml.transform.Templates;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
+import net.sf.json.JSON;
+import net.sf.json.JSONException;
+import net.sf.json.xml.XMLSerializer;
 import org.apache.axis.*;
 import org.apache.axis.components.logger.LogFactory;
 import org.apache.axis.description.OperationDesc;
@@ -86,43 +91,16 @@ import org.w3c.dom.Element;
  */
 public class SRWServlet extends AxisServlet {
 
-    protected static Log servletLog = LogFactory.getLog(SRWServlet.class.getName());
+    protected Log servletLog = LogFactory.getLog(SRWServlet.class.getName());
 
-    /**
-     * this log is for timing
-     */
-    private static final Log tlog
-            = LogFactory.getLog(Constants.TIME_LOG_CATEGORY);
-
-    /**
-     * a separate log for exceptions lets users route them differently from
-     * general low level debug info
-     */
-    private static final Log exceptionLog
-            = LogFactory.getLog(Constants.EXCEPTION_LOG_CATEGORY);
     private static final long serialVersionUID = 1L;
 
-//    public static final String INIT_PROPERTY_TRANSPORT_NAME =
-//        "transport.name";
-//
-//    public static final String INIT_PROPERTY_USE_SECURITY =
-//        "use-servlet-security";
-//    public static final String INIT_PROPERTY_ENABLE_LIST =
-//        "axis.enableListQuery";
-//
-//    public static final String INIT_PROPERTY_JWS_CLASS_DIR =
-//        "axis.jws.servletClassDir";
-    // These have default values.
-    private String serverAddress, transportName;
+    private String portNumber, serverAddress, serverName, transportName;
 
     private ServletSecurityProvider securityProvider = null;
 
-    /**
-     * cache of logging debug option; only evaluated at init time. So no dynamic
-     * switching of logging options with this servlet.
-     */
-    private static boolean isDebug = false;
-    private static final Pattern queryFinder = Pattern.compile("query=([^&]+)");
+    private boolean isDebug = false;
+    private final Pattern queryFinder = Pattern.compile("query=([^&]+)");
 
     /**
      * Should we enable the "?list" functionality on GETs? (off by default
@@ -157,7 +135,7 @@ public class SRWServlet extends AxisServlet {
 
     @Override
     public void destroy() {
-        SRWDatabase.timer.cancel();
+        SRWDatabase.TIMER.cancel();
     }
 
     /**
@@ -170,18 +148,25 @@ public class SRWServlet extends AxisServlet {
         srwInfo = new SRWServletInfo();
         ServletConfig config = getServletConfig();
         srwInfo.init(config);
-        String portNumber = config.getInitParameter("portNumber");
+        portNumber = config.getInitParameter("portNumber");
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("portNumber=" + portNumber);
         }
+        if (portNumber == null) {
+            portNumber = ":80";
+        } else if (!portNumber.startsWith(":")) {
+            portNumber = ":" + portNumber;
+        }
 
-        String serverName = config.getInitParameter("serverName");
+        serverName = config.getInitParameter("serverName");
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("serverName=" + serverName);
         }
+        if (serverName == null) {
+            serverName = "localhost";
+        }
 
-        if(serverName!=null && portNumber!=null)
-            serverAddress = "http://" + serverName + ":" + portNumber;
+        serverAddress = "http://" + serverName + portNumber;
 
         uriResolverFromDisk = new URIResolverFromDisk(SRWServletInfo.srwHome, SRWServletInfo.webappHome);
         addressInHeader = srwInfo.addressInHeader;
@@ -268,7 +253,7 @@ public class SRWServlet extends AxisServlet {
                 response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
             }
         } catch (UnsupportedOperationException e) {
-            servletLog.error("delete not supported by database " + db, e);
+            servletLog.warn("delete not supported by database " + db, e);
             response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
         } catch (Exception e) {
             throw new ServletException("DELETE failed", e);
@@ -288,6 +273,8 @@ public class SRWServlet extends AxisServlet {
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("in doPut: got APP request for " + request.getRequestURI());
         }
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET");
         SRWDatabase db = (SRWDatabase) msgContext.getProperty("db");
         if (servletLog.isDebugEnabled()) {
             servletLog.debug("replacing in database " + db);
@@ -351,6 +338,8 @@ public class SRWServlet extends AxisServlet {
     public void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
         servletLog.debug("Enter: doGet()");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET");
 
         try {
             AxisEngine engine = getEngine();
@@ -485,15 +474,15 @@ public class SRWServlet extends AxisServlet {
                 // the servlet.
 
                 response.setContentType("text/html");
-                PrintWriter writer = response.getWriter();
-                writer.println("<html><h1>Axis HTTP Servlet</h1>");
-                writer.println(Messages.getMessage("reachedServlet00"));
-
-                writer.println("<p>"
-                        + Messages.getMessage("transportName00",
-                                "<b>" + transportName + "</b>"));
-                writer.println("</html>");
-                writer.close();
+                try (PrintWriter writer = response.getWriter()) {
+                    writer.println("<html><h1>Axis HTTP Servlet</h1>");
+                    writer.println(Messages.getMessage("reachedServlet00"));
+                    
+                    writer.println("<p>"
+                            + Messages.getMessage("transportName00",
+                                    "<b>" + transportName + "</b>"));
+                    writer.println("</html>");
+                }
             }
         } catch (AxisFault fault) {
             servletLog.error(fault, fault);
@@ -501,10 +490,7 @@ public class SRWServlet extends AxisServlet {
         } catch (IOException e) {
             servletLog.error(e, e);
             reportTroubleInGet(e, response);
-        } catch (ServletException e) {
-            servletLog.error(e, e);
-            reportTroubleInGet(e, response);
-        } catch (MissingResourceException e) {
+        } catch (ServletException | MissingResourceException e) {
             servletLog.error(e, e);
             reportTroubleInGet(e, response);
         } finally {
@@ -521,6 +507,15 @@ public class SRWServlet extends AxisServlet {
         doGet(request, response);
     }
 
+    @Override
+    public void doOptions(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        servletLog.debug("Enter: doOptions()");
+        response.setHeader("Access-Control-Allow-Origin", "*");
+        response.setHeader("Access-Control-Allow-Methods", "GET");
+        super.doOptions(request, response);
+    }
+
     /**
      * when we get an exception or an axis fault in a GET, we handle it almost
      * identically: we go 'something went wrong', set the response code to 500
@@ -533,28 +528,28 @@ public class SRWServlet extends AxisServlet {
     private void reportTroubleInGet(Exception exception, HttpServletResponse response) throws IOException {
         response.setContentType("text/html");
         servletLog.error(exception, exception);
-        PrintWriter writer = response.getWriter();
-        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-        writer.println("<h2>"
-                + Messages.getMessage("error00")
-                + "</h2>");
-        writer.println("<p>"
-                + Messages.getMessage("somethingWrong00")
-                + "</p>");
-        if (exception instanceof AxisFault) {
-            AxisFault fault = (AxisFault) exception;
-            processAxisFault(fault);
-            writeFault(writer, fault);
-        } else {
-            logException(exception);
-            writer.println("<pre>Exception - " + exception + "<br>");
-            //dev systems only give fault dumps
-            if (isDevelopment()) {
-                writer.println(JavaUtils.stackToString(exception));
+        try (PrintWriter writer = response.getWriter()) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            writer.println("<h2>"
+                    + Messages.getMessage("error00")
+                    + "</h2>");
+            writer.println("<p>"
+                    + Messages.getMessage("somethingWrong00")
+                    + "</p>");
+            if (exception instanceof AxisFault) {
+                AxisFault fault = (AxisFault) exception;
+                processAxisFault(fault);
+                writeFault(writer, fault);
+            } else {
+                logException(exception);
+                writer.println("<pre>Exception - " + exception + "<br>");
+                //dev systems only give fault dumps
+                if (isDevelopment()) {
+                    writer.println(JavaUtils.stackToString(exception));
+                }
+                writer.println("</pre>");
             }
-            writer.println("</pre>");
         }
-        writer.close();
     }
 
     /**
@@ -569,11 +564,8 @@ public class SRWServlet extends AxisServlet {
         Element runtimeException = fault.lookupFaultDetail(
                 Constants.QNAME_FAULTDETAIL_RUNTIMEEXCEPTION);
         if (runtimeException != null) {
-            exceptionLog.info(Messages.getMessage("axisFault00"), fault);
             //strip runtime details
             fault.removeFaultDetail(Constants.QNAME_FAULTDETAIL_RUNTIMEEXCEPTION);
-        } else if (exceptionLog.isDebugEnabled()) {
-            exceptionLog.debug(Messages.getMessage("axisFault00"), fault);
         }
         //dev systems only give fault dumps
         if (!isDevelopment()) {
@@ -587,9 +579,9 @@ public class SRWServlet extends AxisServlet {
      *
      * @param e what went wrong
      */
-    protected void logException(Exception e) {
-        exceptionLog.info(Messages.getMessage("exception00"), e);
-    }
+//    protected void logException(Exception e) {
+//        exceptionLog.info(Messages.getMessage("exception00"), e);
+//    }
 
     /**
      * this method writes a fault out to an HTML stream. This includes escaping
@@ -701,9 +693,9 @@ public class SRWServlet extends AxisServlet {
         //this call could throw an AxisFault. We delegate it up, because
         //if we cant write the message there is not a lot we can do in pure SOAP terms.
         response.setContentType("text/xml");
-        PrintWriter writer = response.getWriter();
-        writer.println(responseMsg.getSOAPPartAsString());
-        writer.close();
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println(responseMsg.getSOAPPartAsString());
+        }
     }
 
     /**
@@ -716,20 +708,19 @@ public class SRWServlet extends AxisServlet {
      */
     protected void reportServiceInfo(HttpServletResponse response, SOAPService service, String serviceName) throws IOException {
         response.setContentType("text/html");
-        PrintWriter writer = response.getWriter();
-
-        writer.println("<h1>"
-                + service.getName()
-                + "</h1>");
-        writer.println(
-                "<p>"
-                + Messages.getMessage("axisService00")
-                + "</p>");
-        writer.println(
-                "<i>"
-                + Messages.getMessage("perhaps00")
-                + "</i>");
-        writer.close();
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println("<h1>"
+                    + service.getName()
+                    + "</h1>");
+            writer.println(
+                    "<p>"
+                            + Messages.getMessage("axisService00")
+                            + "</p>");
+            writer.println(
+                    "<i>"
+                            + Messages.getMessage("perhaps00")
+                            + "</i>");
+        }
     }
 
     /**
@@ -745,35 +736,35 @@ public class SRWServlet extends AxisServlet {
             Document doc = Admin.listConfig(engine);
             if (doc != null) {
                 response.setContentType("text/xml");
-                PrintWriter writer = response.getWriter();
-                XMLUtils.DocumentToWriter(doc, writer);
-                writer.close();
+                try (PrintWriter writer = response.getWriter()) {
+                    XMLUtils.DocumentToWriter(doc, writer);
+                }
             } else {
                 //error code is 404
                 response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
                 response.setContentType("text/html");
-                PrintWriter writer = response.getWriter();
-                writer.println("<h2>"
-                        + Messages.getMessage("error00")
-                        + "</h2>");
-                writer.println("<p>"
-                        + Messages.getMessage("noDeploy00")
-                        + "</p>");
-                writer.close();
+                try (PrintWriter writer = response.getWriter()) {
+                    writer.println("<h2>"
+                            + Messages.getMessage("error00")
+                            + "</h2>");
+                    writer.println("<p>"
+                            + Messages.getMessage("noDeploy00")
+                            + "</p>");
+                }
             }
         } else {
             // list not enable, return error
             //error code is, what, 401
             response.setStatus(HttpURLConnection.HTTP_FORBIDDEN);
             response.setContentType("text/html");
-            PrintWriter writer = response.getWriter();
-            writer.println("<h2>"
-                    + Messages.getMessage("error00")
-                    + "</h2>");
-            writer.println("<p><i>?list</i> "
-                    + Messages.getMessage("disabled00")
-                    + "</p>");
-            writer.close();
+            try (PrintWriter writer = response.getWriter()) {
+                writer.println("<h2>"
+                        + Messages.getMessage("error00")
+                        + "</h2>");
+                writer.println("<p><i>?list</i> "
+                        + Messages.getMessage("disabled00")
+                        + "</p>");
+            }
         }
     }
 
@@ -789,24 +780,24 @@ public class SRWServlet extends AxisServlet {
             String moreDetailCode, AxisFault axisFault) throws IOException {
         res.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
         res.setContentType("text/html");
-        PrintWriter writer = res.getWriter();
-        writer.println("<h2>"
-                + Messages.getMessage("error00")
-                + "</h2>");
-        writer.println("<p>"
-                + Messages.getMessage("noWSDL00")
-                + "</p>");
-        if (moreDetailCode != null) {
+        try (PrintWriter writer = res.getWriter()) {
+            writer.println("<h2>"
+                    + Messages.getMessage("error00")
+                    + "</h2>");
             writer.println("<p>"
-                    + Messages.getMessage(moreDetailCode)
+                    + Messages.getMessage("noWSDL00")
                     + "</p>");
+            if (moreDetailCode != null) {
+                writer.println("<p>"
+                        + Messages.getMessage(moreDetailCode)
+                        + "</p>");
+            }
+            
+            if (axisFault != null && isDevelopment()) {
+                //dev systems only give fault dumps
+                writeFault(writer, axisFault);
+            }
         }
-
-        if (axisFault != null && isDevelopment()) {
-            //dev systems only give fault dumps
-            writeFault(writer, axisFault);
-        }
-        writer.close();
     }
 
     /**
@@ -823,48 +814,46 @@ public class SRWServlet extends AxisServlet {
             throws ConfigurationException, AxisFault, IOException {
         AxisEngine engine = getEngine();
         response.setContentType("text/html");
-        PrintWriter writer = response.getWriter();
-        writer.println("<h2>And now... Some Services</h2>");
-
-        Iterator<?> i;
-        try {
-            i = engine.getConfig().getDeployedServices();
-        } catch (ConfigurationException configException) {
-            //turn any internal configuration exceptions back into axis faults
-            //if that is what they are
-            Exception e = configException.getContainedException();
-            if (e instanceof AxisFault) {
-                throw (AxisFault) e;
-            } else {
-                throw configException;
-            }
-        }
-        String baseURL = getWebappBase(request) + "/services/";
-        writer.println("<ul>");
-        while (i.hasNext()) {
-            ServiceDesc sd = (ServiceDesc) i.next();
-            StringBuilder sb = new StringBuilder();
-            sb.append("<li>");
-            String name = sd.getName();
-            sb.append(name);
-            sb.append(" <a href=\"");
-            sb.append(baseURL);
-            sb.append(name);
-            sb.append("?wsdl\"><i>(wsdl)</i></a></li>");
-            writer.println(sb.toString());
-            ArrayList<?> operations = sd.getOperations();
-            if (!operations.isEmpty()) {
-                writer.println("<ul>");
-                for (Iterator<?> it = operations.iterator(); it.hasNext();) {
-                    OperationDesc desc = (OperationDesc) it.next();
-                    writer.println("<li>" + desc.getName());
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println("<h2>And now... Some Services</h2>");
+            Iterator<?> i;
+            try {
+                i = engine.getConfig().getDeployedServices();
+            } catch (ConfigurationException configException) {
+                //turn any internal configuration exceptions back into axis faults
+                //if that is what they are
+                Exception e = configException.getContainedException();
+                if (e instanceof AxisFault) {
+                    throw (AxisFault) e;
+                } else {
+                    throw configException;
                 }
-                writer.println("</ul>");
             }
-        }
-        writer.println("</ul>");
-        writer.close();
-    }
+            String baseURL = getWebappBase(request) + "/services/";
+            writer.println("<ul>");
+            while (i.hasNext()) {
+                ServiceDesc sd = (ServiceDesc) i.next();
+                StringBuilder sb = new StringBuilder();
+                sb.append("<li>");
+                String name = sd.getName();
+                sb.append(name);
+                sb.append(" <a href=\"");
+                sb.append(baseURL);
+                sb.append(name);
+                sb.append("?wsdl\"><i>(wsdl)</i></a></li>");
+                writer.println(sb.toString());
+                ArrayList<?> operations = sd.getOperations();
+                if (!operations.isEmpty()) {
+                    writer.println("<ul>");
+                    for (Iterator<?> it = operations.iterator(); it.hasNext();) {
+                        OperationDesc desc = (OperationDesc) it.next();
+                        writer.println("<li>" + desc.getName());
+                    }
+                    writer.println("</ul>");
+                }
+            }
+            writer.println("</ul>");
+        }    }
 
     /**
      * generate the error response to indicate that there is apparently no
@@ -878,13 +867,13 @@ public class SRWServlet extends AxisServlet {
         // no such service....
         response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
         response.setContentType("text/html");
-        PrintWriter writer = response.getWriter();
-        writer.println("<h2>"
-                + Messages.getMessage("error00") + "</h2>");
-        writer.println("<p>"
-                + Messages.getMessage("noService06")
-                + "</p>");
-        writer.close();
+        try (PrintWriter writer = response.getWriter()) {
+            writer.println("<h2>"
+                    + Messages.getMessage("error00") + "</h2>");
+            writer.println("<p>"
+                    + Messages.getMessage("noService06")
+                    + "</p>");
+        }
     }
 
     /**
@@ -902,18 +891,18 @@ public class SRWServlet extends AxisServlet {
         boolean foundJWSFile = (new File(realpath).exists())
                 && (realpath.endsWith(Constants.JWS_DEFAULT_FILE_EXTENSION));
         response.setContentType("text/html");
-        PrintWriter writer = response.getWriter();
-        if (foundJWSFile) {
-            response.setStatus(HttpURLConnection.HTTP_OK);
-            writer.println(Messages.getMessage("foundJWS00") + "<p>");
-            String url = request.getRequestURI();
-            String urltext = Messages.getMessage("foundJWS01");
-            writer.println("<a href='" + url + "?wsdl'>" + urltext + "</a>");
-        } else {
-            response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
-            writer.println(Messages.getMessage("noService06"));
+        try (PrintWriter writer = response.getWriter()) {
+            if (foundJWSFile) {
+                response.setStatus(HttpURLConnection.HTTP_OK);
+                writer.println(Messages.getMessage("foundJWS00") + "<p>");
+                String url = request.getRequestURI();
+                String urltext = Messages.getMessage("foundJWS01");
+                writer.println("<a href='" + url + "?wsdl'>" + urltext + "</a>");
+            } else {
+                response.setStatus(HttpURLConnection.HTTP_NOT_FOUND);
+                writer.println(Messages.getMessage("noService06"));
+            }
         }
-        writer.close();
     }
 
     /**
@@ -928,15 +917,13 @@ public class SRWServlet extends AxisServlet {
     @Override
     public void doPost(HttpServletRequest req, HttpServletResponse res)
             throws ServletException, IOException {
-        long t0 = 0, t1 = 0, t2 = 0, t3 = 0, t4;
-        String soapAction = null;
+        String soapAction;
         MessageContext msgContext;
         if (isDebug) {
             servletLog.debug("Enter: doPost()");
         }
-        if (tlog.isDebugEnabled()) {
-            t0 = System.currentTimeMillis();
-        }
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET");
 
         Message responseMsg = null;
         String contentType = req.getContentType().toLowerCase();
@@ -1027,7 +1014,7 @@ public class SRWServlet extends AxisServlet {
                     res.setHeader("Content-Location", recordID + "/");
                     res.setStatus(HttpURLConnection.HTTP_CREATED);
                 } else {
-                    servletLog.error("db.add failed!  returning status code 500");
+                    servletLog.warn("db.add failed!  returning status code 500");
                     res.setStatus(HttpURLConnection.HTTP_INTERNAL_ERROR);
                 }
             } catch (IOException e) {
@@ -1128,8 +1115,6 @@ public class SRWServlet extends AxisServlet {
                                     "SOAPAction"),
                             null, null);
 
-                    exceptionLog.error(Messages.getMessage("genFault00"), af);
-
                     throw af;
                 }
 
@@ -1137,10 +1122,6 @@ public class SRWServlet extends AxisServlet {
                 // These can/should be pooled at some point.
                 // (Sam is Watching! :-)
                 msgContext.setSession(new AxisHttpSession(req));
-
-                if (tlog.isDebugEnabled()) {
-                    t1 = System.currentTimeMillis();
-                }
 
                 srwInfo.setSRWStuff(req, res, msgContext);
 
@@ -1155,9 +1136,6 @@ public class SRWServlet extends AxisServlet {
                 engine.invoke(msgContext);
                 if (isDebug) {
                     servletLog.debug("Return from Axis Engine.");
-                }
-                if (tlog.isDebugEnabled()) {
-                    t2 = System.currentTimeMillis();
                 }
                 responseMsg = msgContext.getResponseMessage();
                 if (responseMsg == null) {
@@ -1195,9 +1173,6 @@ public class SRWServlet extends AxisServlet {
             throw new ServletException(Messages.getMessage("noResponse02"));
         }
         contentType = responseMsg.getContentType(msgContext.getSOAPConstants());
-        if (tlog.isDebugEnabled()) {
-            t3 = System.currentTimeMillis();
-        }
 
         /* Send response back along the wire...  */
         /**
@@ -1209,18 +1184,6 @@ public class SRWServlet extends AxisServlet {
             servletLog.debug("Response sent.");
             servletLog.debug("Exit: doPost()");
         }
-        if (tlog.isDebugEnabled()) {
-            t4 = System.currentTimeMillis();
-            tlog.debug("axisServlet.doPost: " + soapAction
-                    + " pre=" + (t1 - t0)
-                    + " invoke=" + (t2 - t1)
-                    + " post=" + (t3 - t2)
-                    + " send=" + (t4 - t3)
-                    + " " + msgContext.getTargetService() + "."
-                    + ((msgContext.getOperation() == null)
-                    ? "" : msgContext.getOperation().getName()));
-        }
-
     }
 
     /**
@@ -1440,6 +1403,15 @@ public class SRWServlet extends AxisServlet {
         return soapAction;
     }
 
+    private String getXmlContent(String xml, String tag) {
+        int start=xml.indexOf("<"+tag);
+        if(start<0)
+            return null;
+        start = xml.indexOf('>', start + 1);
+        int stop = xml.indexOf("</"+tag+">", start);
+        return xml.substring(start+1, stop);
+    }
+
     /**
      * Provided to allow overload of default JWSClassDir by derived class.
      *
@@ -1452,7 +1424,7 @@ public class SRWServlet extends AxisServlet {
                 : getWebInfPath() + File.separator + "jwsClasses";
     }
 
-    protected MediaInfo getMediaType(HttpServletRequest request, HashMap<String, String> mediaTypes, ContentTypeNegotiator conneg) {
+    private MediaInfo getMediaType(HttpServletRequest request, HashMap<String, String> mediaTypes, ContentTypeNegotiator conneg) {
         String mediaType;
         MediaInfo response=new MediaInfo();
         response.mimeType = request.getParameter("http:accept");
@@ -1468,9 +1440,9 @@ public class SRWServlet extends AxisServlet {
         } else {
             servletLog.debug("2: mimeType=" + response.mimeType);
         }
-        if (response.mimeType == null) {
+        if (response.mimeType == null || response.mimeType.length()==0) {
             servletLog.debug("3: no mimeType");
-            mediaType = "text/xml";
+            response.mimeType = mediaType = "text/xml";
         } else {
             servletLog.debug("3: mimeType=" + response.mimeType);
             mediaType = mediaTypes.get(response.mimeType);
@@ -1496,7 +1468,7 @@ public class SRWServlet extends AxisServlet {
                     ipAddress = addrs.nextElement();
                     if (ipAddress == null) {
                         if (++addressInHeaderErrorCount < 10) {
-                            log.error("Found a " + addressInHeader + " header but had value null");
+                            servletLog.warn("Found a " + addressInHeader + " header but had value null");
                         }
                         continue;
                     }
@@ -1504,8 +1476,8 @@ public class SRWServlet extends AxisServlet {
                         break;
                     }
                 }
-                if (ipAddress == null && ++addressInHeaderErrorCount < 10) {
-                    servletLog.error("Expected a " + addressInHeader + " header but never found one");
+                if (ipAddress == null && ++addressInHeaderErrorCount < 10 && !request.getRemoteAddr().startsWith("127.0.0")) {
+                    servletLog.warn("Expected a " + addressInHeader + " header but never found one");
                     @SuppressWarnings("unchecked")
                     Enumeration<String> headerNames = request.getHeaderNames();
                     String headerName;
@@ -1558,9 +1530,6 @@ public class SRWServlet extends AxisServlet {
         servletLog.debug("enter processMethodRequest");
 //        servletLoginfo("at start: totalMemory="+rt.totalMemory()+", freeMemory="+rt.freeMemory());
         SRWDatabase db = (SRWDatabase) msgContext.getProperty("db");
-        if(serverAddress==null) {
-            serverAddress="http://"+req.getServerName()+":"+req.getServerPort();
-        }
         if (servletLog.isDebugEnabled()) {
             Enumeration<?> enumer = req.getParameterNames();
             String name;
@@ -1581,14 +1550,32 @@ public class SRWServlet extends AxisServlet {
         }
         if (query != null) {
             if (servletLog.isDebugEnabled()) {
-                servletLog.debug("in processMethodRequest: query:\n" + Utilities.byteArrayToString(query.getBytes(Charset.forName("UTF-8"))));
+                servletLog.debug("in processMethodRequest: query:\n" + Utilities.byteArrayToString(query.getBytes(StandardCharsets.UTF_8)));
             }
         }
         if (scanClause != null) {
             if (servletLog.isDebugEnabled()) {
-                servletLog.debug("in processMethodRequest: scanClause:\n" + Utilities.byteArrayToString(scanClause.getBytes(Charset.forName("UTF-8"))));
+                servletLog.debug("in processMethodRequest: scanClause:\n" + Utilities.byteArrayToString(scanClause.getBytes(StandardCharsets.UTF_8)));
             }
         }
+
+        boolean app="APP".equals(req.getAttribute("service")) || "APP".equals(req.getParameter("service"));
+        MediaInfo mediaInfo=null;
+        if(!app) {
+            synchronized(srwInfo.conneg) {
+                mediaInfo=getMediaType(req, srwInfo.mediaTypes, srwInfo.conneg);
+            }
+            if(servletLog.isInfoEnabled())
+                servletLog.info("server defined mediaType: "+mediaInfo.mediaType);
+        }
+        if (mediaInfo==null || mediaInfo.mediaType.equals("")) {// nothing at the server level.  Maybe the db?
+            mediaInfo = getMediaType(req, db.mediaTypes, db.conneg);
+            if(servletLog.isInfoEnabled())
+                servletLog.info("database defined mediaType: "+mediaInfo.mediaType);
+        }
+        String recordPacking=req.getParameter("recordPacking");
+        if(recordPacking==null && mediaInfo.mimeType.contains("json") && !app)
+            recordPacking="json";
 
         if ((operation != null && operation.equals("searchRetrieve")) || query != null) { // searchRetrieveRequest
             int i;
@@ -1601,6 +1588,8 @@ public class SRWServlet extends AxisServlet {
                     .append("<soap:Body xmlns:srw=\"http://www.loc.gov/zing/srw/\">")
                     .append("<srw:searchRetrieveRequest>")
                     .append("<srw:query>").append(encode(query)).append("</srw:query>");
+            if(recordPacking!=null)
+                sb.append("<srw:recordPacking>").append(encode(recordPacking)).append("</srw:recordPacking>");
 
             // is this a request for a single record?
 //            if("APP".equals(req.getAttribute("service"))) {
@@ -1619,75 +1608,77 @@ public class SRWServlet extends AxisServlet {
             boolean badRequest = false;
             String extension, namespace, parm, t;
             Enumeration<?> parms = req.getParameterNames();
+            OUTER:
             while (parms.hasMoreElements()) {
                 parm = (String) parms.nextElement();
-                if (parm.equals("sortKeys")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        sb.append("<srw:sortKeys>").append(t).append("</srw:sortKeys>");
-                    }
-                } else if (parm.equals("startRecord")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        try {
-                            i = Integer.parseInt(t);
-                            if (i < 1) {
+                switch (parm) {
+                    case "sortKeys":
+                        t = req.getParameter(parm);
+                        if (t != null) {
+                            sb.append("<srw:sortKeys>").append(encode(t)).append("</srw:sortKeys>");
+                        }   break;
+                    case "startRecord":
+                        t = req.getParameter(parm);
+                        if (t != null) {
+                            try {
+                                i = Integer.parseInt(t);
+                                if (i < 1) {
+                                    i = Integer.MAX_VALUE;
+                                }
+                            } catch (NumberFormatException e) {
+                                db.response = new SearchRetrieveResponseType(new NonNegativeInteger("0"), null, null, null, null, null, null, null);
+                                SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue, "startRecord=" + t, db.response);
+                                badRequest = true;
+                                break OUTER;
+                            }
+                            sb.append("<srw:startRecord>").append(i).append("</srw:startRecord>");
+                        }
+                        break;
+                    case "maximumRecords":
+                        t = req.getParameter(parm);
+                        if (t != null) {
+                            try {
+                                i = Integer.parseInt(t);
+                                if (i < 0) {
+                                    i = Integer.MAX_VALUE;
+                                }
+                            } catch (NumberFormatException e) {
                                 i = Integer.MAX_VALUE;
                             }
-                        } catch (NumberFormatException e) {
-                            db.response = new SearchRetrieveResponseType(new NonNegativeInteger("0"), null, null, null, null, null, null, null);
-                            SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue, "startRecord=" + t, db.response);
-                            badRequest = true;
-                            break;
-                        }
-                        sb.append("<srw:startRecord>").append(i).append("</srw:startRecord>");
-                    }
-                } else if (parm.equals("maximumRecords")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        try {
-                            i = Integer.parseInt(t);
-                            if (i < 0) {
-                                i = Integer.MAX_VALUE;
+                            
+                            sb.append("<srw:maximumRecords>").append(i).append("</srw:maximumRecords>");
+                        }   break;
+                    case "recordSchema":
+                        t = req.getParameter(parm);
+                        if (t == null) {
+                            t = (String) req.getAttribute(parm);
+                        }   if (t != null) {
+                            sb.append("<srw:recordSchema>").append(encode(t)).append("</srw:recordSchema>");
+                        }   break;
+                    case "resultSetTTL":
+                        t = req.getParameter(parm);
+                        if (t != null) {
+                            try {
+                                i = Integer.parseInt(t);
+                                if (i < 0) {
+                                    i = Integer.MAX_VALUE;
+                                }
+                                sb.append("<srw:resultSetTTL>").append(i).append("</srw:resultSetTTL>");
+                            } catch (NumberFormatException e) {
+                                db.response = new SearchRetrieveResponseType(new NonNegativeInteger("0"), null, null, null, null, null, null, null);
+                                SRWDatabase.diagnostic(SRWDiagnostic.UnsupportedParameterValue, "resultSetTTL=" + t, db.response);
+                                badRequest = true;
+                                break OUTER;
                             }
-                        } catch (NumberFormatException e) {
-                            i = Integer.MAX_VALUE;
                         }
-
-                        sb.append("<srw:maximumRecords>").append(i).append("</srw:maximumRecords>");
-                    }
-                } else if (parm.equals("recordSchema")) {
-                    t = req.getParameter(parm);
-                    if (t == null) {
-                        t = (String) req.getAttribute(parm);
-                        System.out.println("in SRWServlet.processMethodRequest: hooray! adding recordSchema=" + t);
-                    }
-                    if (t != null) {
-                        sb.append("<srw:recordSchema>").append(t).append("</srw:recordSchema>");
-                    }
-                } else if (parm.equals("recordPacking")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        sb.append("<srw:recordPacking>").append(t).append("</srw:recordPacking>");
-                    }
-                } else if (parm.equals("resultSetTTL")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        try {
-                            i = Integer.parseInt(t);
-                            if (i < 0) {
-                                i = Integer.MAX_VALUE;
-                            }
-                            sb.append("<srw:resultSetTTL>").append(i).append("</srw:resultSetTTL>");
-                        } catch (NumberFormatException e) {
-                            servletLog.error("resultSetTTL=" + t);
-                        }
-                    }
-                } else if (parm.equals("version")) {
-                    t = req.getParameter(parm);
-                    if (t != null) {
-                        sb.append("<srw:version>").append(t).append("</srw:version>");
-                    }
+                        break;
+                    case "version":
+                        t = req.getParameter(parm);
+                        if (t != null) {
+                            sb.append("<srw:version>").append(encode(t)).append("</srw:version>");
+                        }   break;
+                    default:
+                        break;
                 }
             }
             boolean hasExtraRequestData = false;
@@ -1720,13 +1711,13 @@ public class SRWServlet extends AxisServlet {
             sb.append("</srw:searchRetrieveRequest></soap:Body></soap:Envelope>");
             if (servletLog.isDebugEnabled()) {
                 servletLog.debug("request=" + sb.toString());
-                servletLog.debug(Utilities.byteArrayToString(sb.toString().getBytes(Charset.forName("UTF-8"))));
+                servletLog.debug(Utilities.byteArrayToString(sb.toString().getBytes(StandardCharsets.UTF_8)));
             }
             if (!badRequest) {
                 servletLog.info(db.dbname + ": " + req.getQueryString());
                 msgContext.setProperty("sru", "");
                 AxisEngine engine = getEngine();
-                ByteArrayInputStream bais = new ByteArrayInputStream(sb.toString().getBytes(Charset.forName("UTF-8")));
+                ByteArrayInputStream bais = new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8));
                 Message msg = new Message(bais, false);
                 msgContext.setRequestMessage(msg);
                 msgContext.setTargetService("SRW");
@@ -1753,17 +1744,42 @@ public class SRWServlet extends AxisServlet {
                 servletLog.debug(numRecordsReturned + " records returned");
             }
             Message respMsg = msgContext.getResponseMessage();
+            String jsonp=req.getParameter("jsonp");
+            if(jsonp==null)
+                jsonp=req.getParameter("callback");
+            boolean redirectResponse=false;
             if (respMsg != null) {
                 ServletOutputStream sos = null;
                 // code to strip SOAP stuff out.  Hope this can go away some day
-                String soapResponse = respMsg.getSOAPPartAsString();
-                if ("APP".equals(req.getAttribute("service")) || "APP".equals(req.getParameter("service"))) {
-                    int start = soapResponse.indexOf("<recordData");
-                    if (start >= 0) {
+                String soapResponse = null;
+                try {
+                    soapResponse = respMsg.getSOAPPartAsString();
+                }
+                catch(OutOfMemoryError e) {
+                    servletLog.error("OutOfMemory doing "+sb.toString());
+                    servletLog.error(HouseKeeping.WhatsHappening());
+                    throw e;
+                }
+                if(servletLog.isDebugEnabled())
+                    servletLog.debug("soapResponse: "+soapResponse);
+                if (app) {
+                    RecordType record=null;
+                    String recordData=null;
+                    if(db.response.getNumberOfRecords().intValue()>0) {
+                        record = db.response.getRecords().getRecord(0);
+                        try {
+                            recordData = record.getRecordData().get_any()[0].getAsString();
+                        } catch (Exception ex) {
+                            Logger.getLogger(SRWServlet.class.getName()).log(Level.SEVERE, null, ex);
+                        }
+                        if(servletLog.isDebugEnabled())
+                            servletLog.debug("recordData: "+recordData);
+                    }
+                    if (record!=null && recordData!=null) {
                         String contentType = (String) req.getAttribute("ContentType");
-                        MediaInfo mediaInfo = getMediaType(req, db.mediaTypes, db.conneg);
-                        if(log.isInfoEnabled())
-                            log.info("database defined mediaType for APP: "+mediaInfo.mediaType);
+                        mediaInfo = getMediaType(req, db.mediaTypes, db.conneg);
+                        if(servletLog.isInfoEnabled())
+                            servletLog.info("database defined mediaType for APP: "+mediaInfo.mediaType);
                         if (contentType == null && mediaInfo.negotiatedContent) {
                             contentType = mediaInfo.mediaType;
                         }
@@ -1783,50 +1799,36 @@ public class SRWServlet extends AxisServlet {
                         if (servletLog.isDebugEnabled()) {
                             servletLog.debug("#1: contentType=" + contentType);
                         }
-                        if (!contentType.equals("text/xml")
-                                && contentType.contains("xml") && !contentType.contains("redirect")) {
-                            String userAgent = req.getHeader("User-Agent");
-                            servletLog.debug("#1: User-Agent=" + userAgent);
-                            if (userAgent != null) {
-                                userAgent = userAgent.toLowerCase();
-                                if (userAgent.startsWith("mozilla")
-                                        || userAgent.startsWith("opera")) {
-                                    contentType = "text/xml";
-                                } else {
-                                    servletLog.debug("unrecognized User-Agent: " + userAgent);
+                        soapResponse = recordData;
+//                        servletLog.info("app record: "+soapResponse);
+                        if(soapResponse.startsWith("<re:redirect"))
+                            redirectResponse=true;
+                        else {
+                            recordPacking=record.getRecordPacking();
+                            if(servletLog.isDebugEnabled())
+                                servletLog.debug("recordPacking="+recordPacking);
+                            resp.setContentType(contentType);
+                            if (contentType.toLowerCase().contains("html")) {
+                                String styleSheet = req.getParameter("stylesheet");
+                                if(styleSheet==null) {
+                                    styleSheet = db.searchStyleSheet;
+                                    if (numRecordsReturned == 0 && db.noRecordsStyleSheet != null) {
+                                        styleSheet = db.noRecordsStyleSheet;
+                                    }
+                                    if (numRecordsReturned == 1 && db.singleRecordStyleSheet != null) {
+                                        styleSheet = db.singleRecordStyleSheet;
+                                    }
+                                    if (numRecordsReturned > 1 && db.multipleRecordsStyleSheet != null) {
+                                        styleSheet = db.multipleRecordsStyleSheet;
+                                    }
                                 }
+                                soapResponse = srwInfo.getXmlHeaders(req, styleSheet) + soapResponse;
                             }
-                        }
-                        if (servletLog.isDebugEnabled()) {
-                            servletLog.debug("#1: set ContentType to " + contentType);
-                        }
-                        resp.setContentType(contentType);
-                        start = soapResponse.indexOf('>', start + 1);
-                        int stop = soapResponse.indexOf("</recordData>", start);
-//                        soapResponse=cleanup(soapResponse.substring(start+1, stop)
-//                            .toCharArray());
-                        soapResponse = soapResponse.substring(start + 1, stop);
-                        if (contentType.toLowerCase().contains("html")) {
-//                            soapResponse=srwInfo.getXmlHeaders(req, db.searchStyleSheet)+Utilities.unXmlEncode(soapResponse);
-                            String styleSheet = req.getParameter("stylesheet");
-                            if(styleSheet==null) {
-                                styleSheet = db.searchStyleSheet;
-                                if (numRecordsReturned == 0 && db.noRecordsStyleSheet != null) {
-                                    styleSheet = db.noRecordsStyleSheet;
+                            if (mediaInfo.negotiatedContent) {
+                                String contentLocation = db.contentLocations.get(mediaInfo.mediaType);
+                                if (contentLocation != null) {
+                                    resp.setHeader("Content-Location", contentLocation);
                                 }
-                                if (numRecordsReturned == 1 && db.singleRecordStyleSheet != null) {
-                                    styleSheet = db.singleRecordStyleSheet;
-                                }
-                                if (numRecordsReturned > 1 && db.multipleRecordsStyleSheet != null) {
-                                    styleSheet = db.multipleRecordsStyleSheet;
-                                }
-                            }
-                            soapResponse = srwInfo.getXmlHeaders(req, styleSheet) + soapResponse;
-                        }
-                        if (mediaInfo.negotiatedContent) {
-                            String contentLocation = db.contentLocations.get(mediaInfo.mediaType);
-                            if (contentLocation != null) {
-                                resp.setHeader("Content-Location", contentLocation);
                             }
                         }
                     } else { // this was an APP get, but we got nothing!
@@ -1859,24 +1861,30 @@ public class SRWServlet extends AxisServlet {
                 }
 
                 // now, let's see if they wanted something other than SRU/XML
-                
-                MediaInfo mediaInfo;
-                synchronized(srwInfo.conneg) {
-                    mediaInfo=getMediaType(req, srwInfo.mediaTypes, srwInfo.conneg);
-                }
-                if(log.isInfoEnabled())
-                    log.info("server defined mediaType: "+mediaInfo.mediaType);
-                if (mediaInfo.mediaType.equals("")) // nothing at the server level.  Maybe the db?
-                {
-                    mediaInfo = getMediaType(req, db.mediaTypes, db.conneg);
-                    if(log.isInfoEnabled())
-                        log.info("database defined mediaType: "+mediaInfo.mediaType);
-                }
-//                if(negotiatedContent)
-//                    resp.setHeader("Content-Location", req.getRequestURI()+"?"+req.getQueryString()+"&httpAccept="+mediaType);
-                if (soapResponse.length() > 0 && !mediaInfo.mediaType.equals("")) {
-                    Transformer trans;
-                    trans = srwInfo.transformers.get(mediaInfo.mediaType);
+                if (soapResponse.length() > 0 && !mediaInfo.mediaType.equals("") && !redirectResponse) {
+                    Transformer trans=null;
+                    if(!app) {
+                        Object o = srwInfo.templatesOrTransformers.get(mediaInfo.mediaType);
+                        if(o!=null) {
+                            if(o instanceof Templates)
+                                try {
+                                    trans=((Templates)o).newTransformer();
+                                } catch (TransformerConfigurationException ex) {
+                                    Logger.getLogger(SRWServlet.class.getName()).log(Level.SEVERE, null, ex);
+                                }
+                            else
+                                trans=(Transformer)o;
+                        }
+                    }
+                    if (trans == null) {
+                        Templates temp=db.templates.get(mediaInfo.mediaType);
+                        if(temp!=null)
+                            try {
+                                trans=temp.newTransformer();
+                            } catch (TransformerConfigurationException ex) {
+                                Logger.getLogger(SRWServlet.class.getName()).log(Level.SEVERE, null, ex);
+                            }
+                    }
                     if (trans == null) {
                         trans = db.transformers.get(mediaInfo.mediaType);
                     }
@@ -1893,14 +1901,17 @@ public class SRWServlet extends AxisServlet {
                             trans.transform(fromRec, new StreamResult(toRec));
                             trans.reset();
                             soapResponse = toRec.toString();
+                            if (servletLog.isDebugEnabled()) {
+                                servletLog.debug("transformed record: " + soapResponse);
+                            }
                             // do they want normalization applied to the result?
                             Normalizer.Form normalForm = db.normalForm.get(mediaInfo.mediaType);
 //                            servletLog.info("mediaType "+mediaType+" requires normalForm "+normalForm);
                             if ((normalForm) != null) {
                                 soapResponse = Normalizer.normalize(soapResponse, normalForm);
                             }
-                            if (req.getParameter("jsonp") != null) {
-                                soapResponse = req.getParameter("jsonp") + "(" + soapResponse + ");";
+                            if (jsonp != null) {
+                                soapResponse = jsonp + "(" + soapResponse + ");";
                             }
                             if (soapResponse.substring(0, Math.min(100, soapResponse.length())).contains("<?xml-stylesheet")) {
                                 if (!mediaInfo.mediaType.contains("html")) {
@@ -1909,21 +1920,6 @@ public class SRWServlet extends AxisServlet {
                             } else {
                                 String contentType = mediaInfo.mediaType;
                                 servletLog.debug("#2: contentType=" + contentType);
-                                if (!contentType.equals("text/xml")
-                                        && contentType.indexOf("xml") > 0) {
-                                    String userAgent = req.getHeader("User-Agent");
-                                    servletLog.debug("#2: User-Agent=" + userAgent);
-                                    if (userAgent != null) {
-                                        userAgent = userAgent.toLowerCase();
-                                        if (userAgent.startsWith("mozilla")
-                                                || userAgent.startsWith("opera")) {
-                                            contentType = "text/xml";
-                                        } else if (servletLog.isDebugEnabled()) {
-                                            servletLog.debug("unrecognized User-Agent: " + userAgent);
-                                        }
-                                    }
-                                }
-                                servletLog.debug("#2: set ContentType to " + contentType);
                                 resp.setContentType(contentType);
                             }
                             if (mediaInfo.mediaType.equals("application/redirect+xml")) {
@@ -1932,7 +1928,6 @@ public class SRWServlet extends AxisServlet {
                                 }
                             }
                         } catch (TransformerException e) {
-                            trans.reset();
                             servletLog.error(e, e);
                             resp.setContentType("text/xml");
                             if (!"HEAD".equals(req.getMethod())) {
@@ -1957,6 +1952,7 @@ public class SRWServlet extends AxisServlet {
                     } else if (mediaInfo.mediaType.contains("html")) {
                         // use the stylesheet that would have gone into the XML response as the transformer
                         String styleSheet = req.getParameter("stylesheet");
+                        boolean userProvidedStylesheet=true;
 //                        HttpURLConnection stylesheetconn=null;
 //                        if(styleSheet!=null && styleSheet.length()>0) {
 //                        URL stylesheeturl=null;
@@ -1979,6 +1975,7 @@ public class SRWServlet extends AxisServlet {
 //                            }
 //                        }
                         if (styleSheet == null) {
+                            userProvidedStylesheet=false;
                             if ("APP".equals(req.getAttribute("service"))
                                     || "APP".equals(req.getParameter("service"))) {
                                 styleSheet = db.appStyleSheet;
@@ -2010,18 +2007,28 @@ public class SRWServlet extends AxisServlet {
 //                                if(!styleSheet.startsWith("/")) // relative URL
 //                                    styleSheet=req.getContextPath()+"/"+styleSheet;
                         if (styleSheet == null) { // crap
-                            servletLog.error("req.getParameter(\"stylesheet\")=" + req.getParameter("stylesheet"));
-                            servletLog.error("APP=" + ("APP".equals(req.getAttribute("service"))
+                            servletLog.warn("req.getParameter(\"stylesheet\")=" + req.getParameter("stylesheet"));
+                            servletLog.warn("APP=" + ("APP".equals(req.getAttribute("service"))
                                     || "APP".equals(req.getParameter("service"))));
-                            servletLog.error("db.appStyleSheet=" + db.appStyleSheet);
-                            servletLog.error("db.searchStyleSheet=" + db.searchStyleSheet);
-                            servletLog.error("languages=" + languages);
-                            servletLog.error("realXsl=" + realXsl);
+                            servletLog.warn("db.appStyleSheet=" + db.appStyleSheet);
+                            servletLog.warn("db.searchStyleSheet=" + db.searchStyleSheet);
+                            servletLog.warn("languages=" + languages);
+                            servletLog.warn("realXsl=" + realXsl);
                         }
                         if (servletLog.isDebugEnabled()) {
                             servletLog.debug("styleSheet=" + styleSheet);
                         }
-                        trans = db.transformers.get(styleSheet);
+                        Templates templ=db.templates.get(styleSheet);
+                        if(templ!=null) { // turn the template into a transformer
+                            try {
+                                trans=templ.newTransformer();
+                            } catch (TransformerConfigurationException ex) {
+                                Logger.getLogger(SRWServlet.class.getName()).log(Level.SEVERE, null, ex);
+                                trans=null;
+                            }
+                        }
+                        else
+                            trans = db.transformers.get(styleSheet);
                         if (trans == null) { // gotta load it
                             Source so = null;
                             try {
@@ -2030,8 +2037,12 @@ public class SRWServlet extends AxisServlet {
                                 Logger.getLogger(SRWServlet.class.getName()).log(Level.SEVERE, null, ex);
                             }
                             if (so == null) {
-                                servletLog.error("uriResolver didn't find " + serverAddress + styleSheet);
-                                URL stylesheeturl = new URL(serverAddress + styleSheet);
+                                servletLog.warn("uriResolver didn't find " + serverAddress + styleSheet);
+                                URL stylesheeturl;
+                                if(styleSheet!=null && styleSheet.startsWith("/"))
+                                    stylesheeturl= new URL(serverAddress + styleSheet);
+                                else
+                                    stylesheeturl = new URL(serverAddress + "/" + styleSheet);
                                 if (servletLog.isDebugEnabled()) {
                                     servletLog.debug("stylesheet url: " + stylesheeturl);
                                 }
@@ -2045,26 +2056,49 @@ public class SRWServlet extends AxisServlet {
                                     throw new ServletException("ConnectException for stylesheet url: " + serverAddress + styleSheet, e);
                                 }
                                 if (stylesheetconn.getResponseCode() != 200) {
-                                    servletLog.error("response code=" + stylesheetconn.getResponseCode() + " getting " + stylesheeturl);
-                                    servletLog.error("request was: " + req.getQueryString());
-                                    throw new ServletException("Error retrieving stylesheet: " + serverAddress + styleSheet + ", response code=" + stylesheetconn.getResponseCode());
+                                    servletLog.warn("response code=" + stylesheetconn.getResponseCode() + " getting " + stylesheeturl);
+                                    servletLog.warn("request was: " + req.getQueryString());
+                                    if(!userProvidedStylesheet)
+                                        throw new ServletException("Error retrieving stylesheet: " + serverAddress + styleSheet + ", response code=" + stylesheetconn.getResponseCode());
+                                    resp.setContentType("text/html");
+                                    resp.setStatus(HttpURLConnection.HTTP_BAD_REQUEST);
+                                    try (PrintWriter writer = resp.getWriter()) {
+                                        writer.println("<html><head><title>VIAF: error</title></head>");
+                                        writer.println("<body><h1>Error: unable to find stylesheet</h1>");
+                                        writer.println("<p>The stylesheet specified ("+styleSheet+
+                                            ") does not exist</p>");
+                                        writer.println("</body></html>");
+                                    }
+                                    return;
                                 }
                                 so = new StreamSource(stylesheetconn.getInputStream());
                             }
                             so.setSystemId(serverAddress + styleSheet);
                             try {
                                 servletLog.debug("building HTML transformer");
-                                trans = TransformerFactory.newInstance().newTransformer(so);
+                                templ=TransformerFactory.newInstance("net.sf.saxon.TransformerFactoryImpl", null).newTemplates(so);
+                                db.templates.put(styleSheet, templ);
+                                trans = templ.newTransformer();
                                 if (trans == null) {
                                     throw new ServletException("newTransformer returned null for styleSheet=" + styleSheet + ", serverAddress=" + serverAddress);
                                 }
                                 servletLog.debug("built HTML transformer");
                                 trans.setURIResolver(uriResolverFromDisk);
                                 servletLog.debug("setURIResolver");
-                                db.transformers.put(styleSheet, trans);
                                 servletLog.debug("put HTML transformer");
                             } catch (TransformerConfigurationException ex) {
-                                throw new ServletException("unable to build transformer " + serverAddress + styleSheet);
+                                if(!userProvidedStylesheet)
+                                    throw new ServletException("unable to build transformer " + serverAddress + styleSheet);
+                                resp.setContentType("text/html");
+                                resp.setStatus(HttpURLConnection.HTTP_BAD_REQUEST);
+                                try (PrintWriter writer = resp.getWriter()) {
+                                    writer.println("<html><head><title>VIAF: error</title></head>");
+                                    writer.println("<body><h1>Error: unknown stylesheet</h1>");
+                                    writer.println("<p>The stylesheet specified ("+styleSheet+
+                                        ") does not exist</p>");
+                                    writer.println("</body></html>");
+                                }
+                                return;
                             }
                         }
                         StringWriter toRec = new StringWriter();
@@ -2084,7 +2118,6 @@ public class SRWServlet extends AxisServlet {
                                 resp.setContentType("text/html");
                             }
                         } catch (TransformerException e) {
-                            trans.reset();
                             servletLog.error(e, e);
                             resp.setContentType("text/xml");
                             if (!"HEAD".equals(req.getMethod())) {
@@ -2103,6 +2136,32 @@ public class SRWServlet extends AxisServlet {
                                         styleSheet);
                             }
                         }
+                    } else if(mediaInfo.mediaType.contains("json")) {
+                        servletLog.info("recordPacking="+recordPacking);
+                        if("json".equals(recordPacking)) {
+                            soapResponse=Utilities.unXmlEncode(soapResponse);
+                        } else {
+                            if(servletLog.isDebugEnabled())
+                                servletLog.debug("XML about to become JSON: "+soapResponse);
+                            XMLSerializer xmlSerializer = new XMLSerializer();  
+                            try {
+                                JSON json = xmlSerializer.read(soapResponse);
+                                soapResponse=json.toString(2);
+                            }
+                            catch(JSONException e) {
+                                servletLog.error("Bad XML: "+soapResponse);
+                                throw e;
+                            }
+                        }
+                        if (jsonp != null) {
+                            soapResponse = jsonp + "(" + soapResponse + ");";
+                        }
+                        if(servletLog.isDebugEnabled())
+                            servletLog.debug("JSON: "+soapResponse);
+                        resp.setContentType(mediaInfo.mediaType);
+                        sos = resp.getOutputStream();
+                        sos.write(soapResponse.getBytes(StandardCharsets.UTF_8));
+                        sos.close();
                     } else { // returning native XML from the database
 //                        String xmlHeaders=srwInfo.getXmlHeaders(req, db.searchStyleSheet).toString();
 //                        if(xmlHeaders.substring(0, Math.min(100, xmlHeaders.length())).contains("xml-stylesheet"))
@@ -2128,7 +2187,7 @@ public class SRWServlet extends AxisServlet {
                             }
                         }
                     }
-                } else { //we don't care what they want, just return the SRU response
+                } else if(!redirectResponse) { //we don't care what they want, just return the SRU response
                     resp.setContentType("text/xml");
                     if (!"HEAD".equals(req.getMethod())) {
                         sos = resp.getOutputStream();
@@ -2168,7 +2227,7 @@ public class SRWServlet extends AxisServlet {
                         sos = resp.getOutputStream();
                     }
                     try {
-                        sos.write(soapResponse.getBytes(Charset.forName("UTF-8")));
+                        sos.write(soapResponse.getBytes(StandardCharsets.UTF_8));
                         sos.close();
                     } catch (IOException e) {
                         // no need to worry about this, let it slide
@@ -2185,13 +2244,17 @@ public class SRWServlet extends AxisServlet {
                         if (diagnostics != null) {
                             DiagnosticType diagnostic = diagnostics.getDiagnostic(0);
                             sb2.append("<br/>SRU Diagnostic: ").append(SRWDiagnostic.toString(diagnostic));
+                            servletLog.warn("SRU Diagnostic: "+SRWDiagnostic.toString(diagnostic));
                         }
                     }
                     sb2.append("</p>");
-                    PrintWriter writer = resp.getWriter();
-                    writer.println(sb2.toString());
-                    servletLog.error("request generated no response!");
-                    writer.close();
+                    try (PrintWriter writer = resp.getWriter()) {
+                        writer.println(sb2.toString());
+                        if(!badRequest) { // we had a good request, but generated no response
+                            servletLog.warn("search request generated no response!");
+                            servletLog.warn("queryString: "+req.getQueryString());
+                        }
+                    }
                 }
             }
 //            servletLog.info("at exit: totalMemory="+rt.totalMemory()+", freeMemory="+rt.freeMemory());
@@ -2203,6 +2266,7 @@ public class SRWServlet extends AxisServlet {
             int i;
             String t;
             StringBuilder sb = new StringBuilder();
+            servletLog.info(db.dbname + " scan: " + req.getQueryString());
             sb.append("<soap:Envelope ")
                     .append("xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\" ")
                     .append("xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" ")
@@ -2256,7 +2320,7 @@ public class SRWServlet extends AxisServlet {
             if (servletLog.isDebugEnabled()) {
                 servletLog.debug("request=" + sb.toString());
             }
-            ByteArrayInputStream bais = new ByteArrayInputStream(sb.toString().getBytes(Charset.forName("UTF-8")));
+            ByteArrayInputStream bais = new ByteArrayInputStream(sb.toString().getBytes(StandardCharsets.UTF_8));
             Message msg = new Message(bais, false);
             msgContext.setRequestMessage(msg);
             try {
@@ -2268,28 +2332,30 @@ public class SRWServlet extends AxisServlet {
             if (respMsg != null) {
                 resp.setContentType("text/xml");
                 if (!"HEAD".equals(req.getMethod())) {
-                    PrintWriter writer = resp.getWriter();
                     // code to strip SOAP stuff out.  Hope this can go away some day
-                    String soapResponse = respMsg.getSOAPPartAsString();
-                    int start = soapResponse.indexOf("<scanResponse");
-                    if (start >= 0) {
-                        int stop = soapResponse.indexOf("</scanResponse>");
-    //                    soapResponse=cleanup(soapResponse.substring(start, stop+15)
-                        //                        .toCharArray());
-                        soapResponse = "<scanResponse xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.loc.gov/zing/srw/ http://www.loc.gov/standards/sru/sru1-1archive/xml-files/srw-types.xsd\"" + soapResponse.substring(start + 13, stop + 15);
-                        srwInfo.writeXmlHeader(writer, msgContext, req,
-                                db.scanStyleSheet);
+                    try (PrintWriter writer = resp.getWriter()) {
+                        // code to strip SOAP stuff out.  Hope this can go away some day
+                        String soapResponse = respMsg.getSOAPPartAsString();
+                        int start = soapResponse.indexOf("<scanResponse");
+                        if (start >= 0) {
+                            int stop = soapResponse.indexOf("</scanResponse>");
+                            //                    soapResponse=cleanup(soapResponse.substring(start, stop+15)
+                            //                        .toCharArray());
+                            soapResponse = "<scanResponse xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.loc.gov/zing/srw/ http://www.loc.gov/standards/sru/sru1-1archive/xml-files/srw-types.xsd\"" + soapResponse.substring(start + 13, stop + 15);
+                            srwInfo.writeXmlHeader(writer, msgContext, req,
+                                    db.scanStyleSheet);
+                        }
+                        writer.println(soapResponse);
                     }
-                    writer.println(soapResponse);
-                    writer.close();
                 }
             } else {
                 resp.setContentType("text/html");
                 if (!"HEAD".equals(req.getMethod())) {
-                    PrintWriter writer = resp.getWriter();
-                    writer.println("<p>" + Messages.getMessage("noResponse01") + "</p>");
-                    servletLog.error("request generated no response!");
-                    writer.close();
+                    try (PrintWriter writer = resp.getWriter()) {
+                        writer.println("<p>" + Messages.getMessage("noResponse01") + "</p>");
+                        servletLog.warn("scan request generated no response!");
+                        servletLog.warn("queryString: "+req.getQueryString());
+                    }
                 }
             }
             if (servletLog.isDebugEnabled()) {
@@ -2302,53 +2368,6 @@ public class SRWServlet extends AxisServlet {
         servletLog.error("operation=" + operation + ", query=" + query + ", scanClause=" + scanClause);
     }
 
-//    private String cleanup(char[] buf) {
-//        boolean didOne=false, insideRecordData=false;
-//        int i, j, len=buf.length;
-//
-//        for(i=0; i<len; i++) {
-////            if(buf[i]==' ' && len-i>5) // might be " xsi:"
-////                if(buf[i+1]=='x' && buf[i+2]=='s' && buf[i+3]=='i' &&
-////                  buf[i+4]==':') {
-////                    if(insideRecordData)
-////                        if(didOne)
-////                            continue;
-////                        else
-////                            didOne=true;
-////                    boolean foundQuote=false;
-////                    for(j=i+5; j<len; j++)
-////                        if(buf[j]=='"')
-////                            if(foundQuote)
-////                                break;
-////                            else
-////                                foundQuote=true;
-////                    if(j==len) // never found matching quotes, so ignore
-////                        continue;
-////                    // remove offending chars
-////                    //servletLog.info("i="+i+", j="+j+", len="+len);
-////                    System.arraycopy(buf, j+1, buf, i, len-j-1);
-////                    len-=(j-i)+1;
-////                    i--;
-////                    continue;
-////                }
-//            if(buf[i]=='<' && len-1>11) // might be "<recordData>"
-//                if(buf[i+1]=='r' && buf[i+2]=='e' && buf[i+3]=='c' &&
-//                  buf[i+4]=='o' && buf[i+5]=='r' && buf[i+6]=='d' &&
-//                  buf[i+7]=='D' && buf[i+8]=='a' && buf[i+9]=='t' &&
-//                  buf[i+10]=='a') {
-//                    insideRecordData=true;
-//                    didOne=false;
-//                }
-//            if(buf[i]=='<' && len-1>12) // might be "</recordData>"
-//                if(buf[i+1]=='/' && buf[i+2]=='r' && buf[i+3]=='e' &&
-//                  buf[i+4]=='c' && buf[i+5]=='o' && buf[i+6]=='r' &&
-//                  buf[i+7]=='d' && buf[i+8]=='D' && buf[i+9]=='a' &&
-//                  buf[i+10]=='t' && buf[i+11]=='a') {
-//                    insideRecordData=false;
-//                }
-//        }
-//        return new String(buf, 0, len);
-//    }
     public static String encode(String s) {
         if (s == null) {
             return "";
@@ -2361,8 +2380,16 @@ public class SRWServlet extends AxisServlet {
             {
                 continue; // and they mess up the XML response
             }
+//            if(c=='%' && i+2<chars.length) { // hex code! They might be sneeking in a control character!
+//                if(Character.isDigit(chars[i+1]) && Character.isDigit(chars[i+2])) {
+//                    if(Integer.parseInt(new String(chars, i+1, 2))<' ') {
+//                        i+=2;
+//                        continue;
+//                    }
+//                }
+//            }
             if (c == '<' || c == '&' || c == '>' || c == '"' || c == '\'' || c == '\\') {
-                sb.append("&#").append(Integer.toString(c)).append(';');
+                sb.append("&#").append((int)c).append(';');
             } else {
                 sb.append(c);
             }

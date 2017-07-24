@@ -26,11 +26,18 @@ package ORG.oclc.os.SRW;
  * @author levan
  */
 public class Record {
-    String extraRecordInfo, identifier, record, schemaID;
+    String extraRecordInfo, identifier, record, recordPacking, schemaID;
 
     public Record(String record, String schemaID) {
         this.record=record;
         this.schemaID=schemaID;
+        this.recordPacking="xml";
+    }
+
+    public Record(String record, String schemaID, String recordPacking) {
+        this.record=record;
+        this.schemaID=schemaID;
+        this.recordPacking=recordPacking;
     }
 
     public String getExtraRecordInfo() {
@@ -41,14 +48,18 @@ public class Record {
         return identifier;
     }
 
-    public String getRecordSchemaID() {
-        return schemaID;
-    }
-
     public String getRecord() {
         return record;
     }
     
+    public String getRecordPacking() {
+        return recordPacking;
+    }
+    
+    public String getRecordSchemaID() {
+        return schemaID;
+    }
+
     public boolean hasExtraRecordInfo() {
         return extraRecordInfo!=null;
     }
@@ -61,10 +72,15 @@ public class Record {
         this.identifier = identifier;
     }
 
+    public void setRecordPacking(String recordPacking){
+        this.recordPacking = recordPacking;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb=new StringBuilder();
-        sb.append("Record: schemaID=").append(schemaID);
+        sb.append("Record: schemaID=").append(schemaID)
+                .append(", recordPacking=").append(recordPacking);
         if(record.length()<=80) {
             sb.append(", content:\n");
             sb.append(record);

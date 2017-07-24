@@ -11,7 +11,6 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.net.URL;
-import java.util.HashMap;
 import java.util.Properties;
 import javax.servlet.http.HttpServletRequest;
 import javax.xml.parsers.DocumentBuilder;
@@ -36,30 +35,7 @@ import org.z3950.zing.cql.CQLTermNode;
  */
 public class SRWOpenSearchDatabase extends SRWDatabase {
     static Log log=LogFactory.getLog(SRWOpenSearchDatabase.class);
-    protected String author, contact, description, restrictions, defaultSchemaID, defaultSchemaName, title;
-    private final StringBuilder localSchemaInfo=new StringBuilder();
-    protected final HashMap<String, String> templates=new HashMap<String, String>();
-    public int itemsPerPage;
-
-    public void addSchema(String name, String id, String location, String title, String template) {
-        localSchemaInfo.append("          <schema");
-        if(id!=null) {
-            localSchemaInfo.append("              identifier=\"").append(id).append("\"\n");
-            templates.put(id, template);
-        }
-        if(location!=null)
-            localSchemaInfo.append("              location=\"").append(location).append("\"\n");
-        localSchemaInfo.append("              sort=\"false\" retrieve=\"true\" name=\"").append(name).append("\">\n")
-          .append("            <title>").append(title).append("</title>\n")
-          .append("            </schema>\n");
-        if(name!=null) {
-            templates.put(name, template);
-            if(defaultSchemaName==null)
-                defaultSchemaName=name;
-        }
-        if(location!=null)
-            templates.put(location, template);
-    }
+    private String author, contact, description, restrictions, schemaID, schemaLocation, schemaName, title;
 
     @Override
     public String getDatabaseInfo() {
@@ -88,11 +64,12 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
     public String getIndexInfo() {
         StringBuilder sb=new StringBuilder();
         sb.append("        <indexInfo>\n")
-          .append("          <set identifier=\"info:srw/cql-context-set/1/cql-v1.1\" name=\"cql\"/>\n")
+          .append("          <set identifier=\"info:srw/oai-context-set/1/oai-v1.0\"")
+          .append(" name=\"oai\"/>\n")
           .append("          <index>\n")
           .append("            <title>cql.serverChoice</title>\n")
           .append("            <map>\n")
-          .append("              <name set=\"cql\">serverChoice</name>\n")
+          .append("              <name set=\"oai\">serverChoice</name>\n")
           .append("              </map>\n")
           .append("            <configInfo>\n")
           .append("              <supports type='relation'>=</supports>\n")
@@ -103,15 +80,19 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
     }
 
     @Override
-    public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException, SRWDiagnostic {
-        return new OpenSearchQueryResult(query, request, this);
+    public QueryResult getQueryResult(String query, SearchRetrieveRequestType request) throws InstantiationException {
+        throw new UnsupportedOperationException("Not supported yet."); //To change body of generated methods, choose Tools | Templates.
     }
 
     @Override
     public String getSchemaInfo() {
         StringBuilder sb=new StringBuilder();
         sb.append("        <schemaInfo>\n")
-          .append(localSchemaInfo.toString())
+          .append("          <schema identifier=\"").append(schemaID).append("\"\n")
+          .append("              location=\"").append(schemaLocation).append("\"\n")
+          .append("              sort=\"false\" retrieve=\"true\" name=\"").append(schemaName).append("\">\n")
+          .append("            <title>RDF</title>\n")
+          .append("            </schema>\n")
           .append("          </schemaInfo>\n");
         return sb.toString();
     }
@@ -145,9 +126,9 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         description=dbProperties.getProperty("SRWOpenSearchDatabase.description");
         restrictions=dbProperties.getProperty("SRWOpenSearchDatabase.restrictions");
         title=dbProperties.getProperty("SRWOpenSearchDatabase.title");
-        defaultSchemaName=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaName");
-        defaultSchemaID=dbProperties.getProperty("SRWOpenSearchDatabase.defaultSchemaID");
-        itemsPerPage=Integer.parseInt(dbProperties.getProperty("SRWOpenSearchDatabase.itemsPerPage", "0"));
+        schemaName=dbProperties.getProperty("SRWOpenSearchDatabase.schemaName");
+        schemaID=dbProperties.getProperty("SRWOpenSearchDatabase.schemaID");
+        schemaLocation=dbProperties.getProperty("SRWOpenSearchDatabase.schemaLocation");
         URL url=new URL(urlStr);
         BufferedReader in = new BufferedReader(new InputStreamReader(url.openStream()));
         StringBuilder sb=new StringBuilder();
@@ -190,22 +171,14 @@ public class SRWOpenSearchDatabase extends SRWDatabase {
         NodeList nl = (NodeList) expr.evaluate(document, XPathConstants.NODESET);
         NamedNodeMap attrs;
         String template, type;
-        if(nl.getLength()==0) {
-            throw new InstantiationException("No OpenSearchDescription/Url found in "+url);
-        }
         for(int i=0; i<nl.getLength(); i++) {
             Node n=nl.item(i);
             attrs = n.getAttributes();
             n=attrs.getNamedItem("template");
             template=n.getTextContent();
-            log.debug("template="+template);
             n=attrs.getNamedItem("type");
             type=n.getTextContent();
             log.info("<Url type='"+type+"' template='"+template+"'/>");
-            if("application/rss+xml".equals(type)){
-                addSchema("RSS2.0", "rss", "http://europa.eu/rapid/conf/RSS20.xsd",
-                        "RSS Items", template);
-            }
         }
         log.debug("leaving SRWOpenSearchDatabase.init");
     }

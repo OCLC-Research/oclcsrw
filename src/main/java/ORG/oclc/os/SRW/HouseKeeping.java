@@ -61,7 +61,7 @@ public class HouseKeeping extends java.util.TimerTask {
         long   now=System.currentTimeMillis(), when;
         QueryResult result, sortedResult;
         String resultSetName;
-        for(timerIterator=(new HashMap<String, Long>(timers)).keySet().iterator(); timerIterator.hasNext();) {
+        for(timerIterator=(new HashMap<>(timers)).keySet().iterator(); timerIterator.hasNext();) {
             resultSetName=timerIterator.next();
             when=timers.get(resultSetName);
             if(when<now) {
@@ -111,7 +111,7 @@ public class HouseKeeping extends java.util.TimerTask {
             }
         }
         if(log.isDebugEnabled() && executionCount++%10==0) { // this should happen about every 10 minutes
-            HashSet<String> stackTops=new HashSet<String>();
+            HashSet<String> stackTops=new HashSet<>();
             int idleCount=0;
             int tCount = Thread.activeCount();
             log.debug("Thread count="+tCount);
@@ -133,5 +133,17 @@ public class HouseKeeping extends java.util.TimerTask {
             }
             log.debug(idleCount+" idle threads");
         }
+    }
+    
+    public static String WhatsHappening() {
+        long   now=System.currentTimeMillis();
+        StringBuilder sb=new StringBuilder();
+        for (SRWDatabase db : SRWDatabase.allDbs) {
+            if(db.checkoutTime>db.checkinTime)
+                sb.append(db.dbname).append(": running ")
+                  .append((now-db.checkoutTime)/1000).append(" seconds doing ")
+                  .append(db.checkoutReason).append("\n");
+        }
+        return sb.toString();
     }
 }

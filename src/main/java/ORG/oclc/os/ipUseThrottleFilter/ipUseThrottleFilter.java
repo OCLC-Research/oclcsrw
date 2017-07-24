@@ -1,5 +1,5 @@
 /*
-   Copyright 2015 OCLC Online Computer Library Center, Inc.
+   Copyright 2012 OCLC Online Computer Library Center, Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
@@ -34,11 +34,11 @@ import org.apache.commons.logging.LogFactory;
  */
 public class ipUseThrottleFilter implements Filter {
     static Log log=LogFactory.getLog(ipUseThrottleFilter.class);
-    static final ConcurrentHashMap<String, Integer> simultaneousRequestsByShortIPAddr=new ConcurrentHashMap<String, Integer>();
-    static final HashMap<String, String> equivalentAddresses=new HashMap<String, String>();
-    static final HashSet<String> ignorableAddresses=new HashSet<String>();
-    static final HashMap<String, Integer> totalRequests=new HashMap<String, Integer>();
-    static final Set<String> simultaneousRequests=new HashSet<String>();
+    static final ConcurrentHashMap<String, Integer> simultaneousRequestsByShortIPAddr=new ConcurrentHashMap<>();
+    static final HashMap<String, String> equivalentAddresses=new HashMap<>();
+    static final HashSet<String> ignorableAddresses=new HashSet<>();
+    static final HashMap<String, Integer> totalRequests=new HashMap<>();
+    static final Set<String> simultaneousRequests=new HashSet<>();
     static int /*maxSimultaneousRequests=3,*/ maxTotalSimultaneousRequests=10, nextReportingHour;
     static int addressInHeaderErrorCount=0, totalSimultaneousRequests=0;
     static String contactInfo=null;
@@ -126,19 +126,19 @@ public class ipUseThrottleFilter implements Filter {
 
         synchronized(simultaneousRequestsByShortIPAddr) {
             if(totalSimultaneousRequests>=maxTotalSimultaneousRequests) {
-                log.error("This system has exceeded the maxTotalSimultaneousRequests limit of "+maxTotalSimultaneousRequests);
-                log.error(simultaneousRequestsByShortIPAddr);
+                log.warn("This system has exceeded the maxTotalSimultaneousRequests limit of "+maxTotalSimultaneousRequests);
+                log.warn(simultaneousRequestsByShortIPAddr);
                 for(String str:simultaneousRequests)
-                    log.error(str);
+                    log.warn(str);
                 ((HttpServletResponse)response).setStatus(HttpURLConnection.HTTP_UNAVAILABLE);
                 response.setContentType("text/html");
-                PrintWriter writer = response.getWriter();
-                writer.println( "<html><body><h1>Service Temporarily Unavailable</h1>" );
-                writer.println( "The system is experiencing a severe load and is temporarily unable to accept new requests");
-                if(contactInfo!=null)
-                    writer.println("<p>Contact "+contactInfo+" for more information</p>");
-                writer.println("</body></html>");
-                writer.close();
+                try (PrintWriter writer = response.getWriter()) {
+                    writer.println( "<html><body><h1>Service Temporarily Unavailable</h1>" );
+                    writer.println( "The system is experiencing a severe load and is temporarily unable to accept new requests");
+                    if(contactInfo!=null)
+                        writer.println("<p>Contact "+contactInfo+" for more information</p>");
+                    writer.println("</body></html>");
+                }
                 return;
             }
             if(addressInHeader!=null) {
@@ -148,7 +148,7 @@ public class ipUseThrottleFilter implements Filter {
                     longAddr=addrs.nextElement();
                     if(longAddr==null) {
                         if(++addressInHeaderErrorCount<10)
-                            log.error("Expected a "+addressInHeader+" header but got null");
+                            log.warn("Expected a "+addressInHeader+" header but got null");
                         continue;
                     }
                     if(longAddr.lastIndexOf('.')>=0)
@@ -159,8 +159,9 @@ public class ipUseThrottleFilter implements Filter {
                 longAddr=request.getRemoteAddr();
             int i=longAddr.lastIndexOf('.');
             if(i<0) {
-                log.error("bogus IP address: '"+longAddr+"'");
+                log.warn("bogus IP address: '"+longAddr+"'");
                 longAddr="0.0.0.0";
+                i=longAddr.lastIndexOf('.');
             }
             shortAddr=longAddr.substring(0, i); // trim off 4th number group
                 // that lets us spot requests from clusters
@@ -180,22 +181,22 @@ public class ipUseThrottleFilter implements Filter {
                 if(maxSimultaneousRequests==0)
                     maxSimultaneousRequests=1;
                 if(count>=maxSimultaneousRequests) {
-                    log.error("IP addr "+shortAddr+".* has exceeded "+maxSimultaneousRequests+" simultaneous requests!");
-                    log.error("maxTotalSimultaneousRequests="+maxTotalSimultaneousRequests);
-                    log.error("totalSimultaneousRequests="+totalSimultaneousRequests);
+                    log.warn("IP addr "+shortAddr+".* has exceeded "+maxSimultaneousRequests+" simultaneous requests!");
+                    log.warn("maxTotalSimultaneousRequests="+maxTotalSimultaneousRequests);
+                    log.warn("totalSimultaneousRequests="+totalSimultaneousRequests);
                     for(String str:simultaneousRequests)
-                        log.error(str);
+                        log.warn(str);
     //                ((HttpServletResponse)response).setStatus(HttpURLConnection.HTTP_TOO_MANY_REQUESTS); // someday
                     ((HttpServletResponse)response).setStatus(429); // too many requests
                     response.setContentType("text/html");
-                    PrintWriter writer = response.getWriter();
-                    writer.println( "<html><head><title>Too Many Requests</title></head><body><h1>Too Many Requests</h1>" );
-                    writer.println( "You have exceeded the maximum simultaneous request value of "+maxSimultaneousRequests);
-                    writer.println("<p>This message and your IP address have been logged and reported</p>");
-                    if(contactInfo!=null)
-                        writer.println("<p>Contact "+contactInfo+" for more information</p>");
-                    writer.println("</body></html>");
-                    writer.close();
+                    try (PrintWriter writer = response.getWriter()) {
+                        writer.println( "<html><head><title>Too Many Requests</title></head><body><h1>Too Many Requests</h1>" );
+                        writer.println( "You have exceeded the maximum simultaneous request value of "+maxSimultaneousRequests);
+                        writer.println("<p>This message and your IP address have been logged and reported</p>");
+                        if(contactInfo!=null)
+                            writer.println("<p>Contact "+contactInfo+" for more information</p>");
+                        writer.println("</body></html>");
+                    }
                     return;
                 }
                 simultaneousRequestsByShortIPAddr.put(shortAddr, count+1);
@@ -240,10 +241,10 @@ public class ipUseThrottleFilter implements Filter {
             nextReportingHour=hour+1;
 
             if(log.isInfoEnabled()) {
-                HashMap<String, Integer> map = new LinkedHashMap<String, Integer>();
-                List<String> yourMapKeys = new ArrayList<String>(totalRequests.keySet());
-                List<Integer> yourMapValues = new ArrayList<Integer>(totalRequests.values());
-                TreeSet<Integer> sortedSet = new TreeSet<Integer>(yourMapValues);
+                HashMap<String, Integer> map = new LinkedHashMap<>();
+                List<String> yourMapKeys = new ArrayList<>(totalRequests.keySet());
+                List<Integer> yourMapValues = new ArrayList<>(totalRequests.values());
+                TreeSet<Integer> sortedSet = new TreeSet<>(yourMapValues);
                 Integer[] sortedArray = sortedSet.descendingSet().toArray(new Integer[0]);
                 int size = sortedArray.length;
 

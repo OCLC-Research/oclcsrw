@@ -3,57 +3,106 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-
 package ORG.oclc.os.SRW;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.xml.transform.ErrorListener;
 import javax.xml.transform.Result;
 import javax.xml.transform.Source;
+import javax.xml.transform.Templates;
+import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.URIResolver;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
-import net.sf.json.JSON;
-import net.sf.json.xml.XMLSerializer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-/**b
+
+/**
  *
  * @author levan
  */
-public class xml2jsonTransformer extends DatabaseRecordTransformer {
-    private static final Log LOG=LogFactory.getLog(xml2jsonTransformer.class);
+public class TransformerPipeline extends Transformer {
+    Log log=LogFactory.getLog(TransformerPipeline.class.getName());
+    ArrayList<Object> templateOrTransformer=new ArrayList<>();
 
     @Override
     public void transform(Source xmlSource, Result outputTarget) throws TransformerException {
-        StreamSource source=(StreamSource) xmlSource;
-        BufferedReader br=new BufferedReader(source.getReader());
-        StringBuilder sb=new StringBuilder();
-        String line;
+        ByteArrayOutputStream baos;
+        Iterator<Object> iter = templateOrTransformer.iterator();
+        Object o;
+        String intermediateRecord;
+        Transformer t;
+        for(int i=1; iter.hasNext(); i++) {
+            o=iter.next();
+            if(o instanceof Templates) {
+                t=((Templates)o).newTransformer();
+            }
+            else
+                t=(Transformer)o;
+            if(iter.hasNext()) { // chain
+                t.transform(xmlSource, new StreamResult(baos=new ByteArrayOutputStream()));
+                // a redirect response ends the chain
+                intermediateRecord=new String(baos.toByteArray());
+                if(log.isDebugEnabled()) {
+                    log.debug("conversion "+i+" of "+templateOrTransformer.size()+":");
+                    log.debug(intermediateRecord);
+                }
+                if(intermediateRecord.startsWith("<re:redirect")) {
+                    try {
+                        if(((StreamResult)outputTarget).getWriter()!=null)
+                            ((StreamResult)outputTarget).getWriter().write(intermediateRecord);
+                        else
+                            ((StreamResult)outputTarget).getOutputStream().write(intermediateRecord.getBytes(StandardCharsets.UTF_8));
+                    }
+                    catch(IOException e) {
+                        throw new TransformerException(e);
+                    }
+                    return;
+                }
+                xmlSource=new StreamSource(new ByteArrayInputStream(baos.toByteArray()));
+            } else { // write to output
+                t.transform(xmlSource, outputTarget);
+            }
+        }
+    }
+
+    public void addTemplates(Templates t) {
+        templateOrTransformer.add(t);
+    }
+    
+    public void addTransformer(Transformer t) {
+        templateOrTransformer.add(t);
+    }
+    
+    static String convertStreamToString(StreamSource source) {
+        InputStream is = source.getInputStream();
+        is.mark(Integer.MAX_VALUE);
+        java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
+        String str = s.hasNext() ? s.next() : "";
         try {
-            while((line=br.readLine())!=null)
-                sb.append(line);
+            is.reset();
         } catch (IOException ex) {
-            throw new TransformerException(ex);
+            Logger.getLogger(TransformerPipeline.class.getName()).log(Level.SEVERE, null, ex);
         }
-        String xmlRecord=sb.toString();
-        if(LOG.isDebugEnabled())
-            LOG.debug("xmlSource: "+xmlRecord);
-        XMLSerializer xmlSerializer = new XMLSerializer();
-        try {
-            JSON json=xmlSerializer.read(xmlRecord);
-            StreamResult sr=(StreamResult) outputTarget;
-            json.write(sr.getWriter());
-            if(LOG.isDebugEnabled())
-                LOG.debug("convertedJSON: "+sr.toString());
-        }
-        catch(Exception e) {
-            LOG.error("Unable to transform to JSON: "+xmlRecord);
-            throw new TransformerException(e);
-        }
+        return str;
+    }
+
+    public boolean isEmpty() {
+        return templateOrTransformer.isEmpty();
+    }
+
+    @Override
+    public void reset() {
     }
 
     @Override

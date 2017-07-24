@@ -333,7 +333,7 @@ public class SRWSoapBindingImpl implements SRWPort {
         ert.setMaximumRecords(request.getMaximumRecords());
         String query=request.getQuery();
         if(query!=null && query.length()>0) {
-            ert.setQuery(query);
+            ert.setQuery(makeSafe(query));
             try {
                 CQLNode root=cqlparser.parse(query);
                 ert.setXQuery(toOperandType(root));
@@ -405,7 +405,7 @@ public class SRWSoapBindingImpl implements SRWPort {
             RelationType rt=new RelationType();
             rt.setValue(ctn.getRelation().getBase());
             sct.setRelation(rt);
-            sct.setTerm(ctn.getTerm());
+            sct.setTerm(makeSafe(ctn.getTerm()));
             ot.setSearchClause(sct);
         }
         else {
@@ -430,6 +430,27 @@ public class SRWSoapBindingImpl implements SRWPort {
         }
         
         return (String) args;
+    }
+
+    private String makeSafe(String s) {
+        if (s == null) {
+            return "";
+        }
+        boolean didSomething=false;
+        StringBuilder sb = new StringBuilder();
+        char[] chars=s.toCharArray();
+        for(char c:chars) {
+            if (c < ' ') // control characters got in as backslash sequences
+            {            // in the CQL parser.  Return them to that format
+                sb.append('\\').append(Integer.toString(c));
+                didSomething=true;
+            } else {
+                sb.append(c);
+            }
+        }
+        if(didSomething)
+            return sb.toString();
+        return s;
     }
 }
 

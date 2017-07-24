@@ -14,6 +14,6 @@ import javax.xml.transform.Transformer;
  * @author levan
  */
 public abstract class DatabaseRecordTransformer extends Transformer {
-    public void init(Properties properties) {
+    public void init(String propertyNamePrefix, Properties properties) {
     }
 }
