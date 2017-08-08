@@ -95,7 +95,7 @@ public class SRWServlet extends AxisServlet {
 
     private static final long serialVersionUID = 1L;
 
-    private String portNumber, serverAddress, serverName, transportName;
+    private String portNumber, serverAddress=null, serverName, transportName;
 
     private ServletSecurityProvider securityProvider = null;
 
@@ -148,25 +148,6 @@ public class SRWServlet extends AxisServlet {
         srwInfo = new SRWServletInfo();
         ServletConfig config = getServletConfig();
         srwInfo.init(config);
-        portNumber = config.getInitParameter("portNumber");
-        if (servletLog.isDebugEnabled()) {
-            servletLog.debug("portNumber=" + portNumber);
-        }
-        if (portNumber == null) {
-            portNumber = ":80";
-        } else if (!portNumber.startsWith(":")) {
-            portNumber = ":" + portNumber;
-        }
-
-        serverName = config.getInitParameter("serverName");
-        if (servletLog.isDebugEnabled()) {
-            servletLog.debug("serverName=" + serverName);
-        }
-        if (serverName == null) {
-            serverName = "localhost";
-        }
-
-        serverAddress = "http://" + serverName + portNumber;
 
         uriResolverFromDisk = new URIResolverFromDisk(SRWServletInfo.srwHome, SRWServletInfo.webappHome);
         addressInHeader = srwInfo.addressInHeader;
@@ -207,6 +188,31 @@ public class SRWServlet extends AxisServlet {
         }
     }
 
+    void init(HttpServletRequest request) {
+        if(serverAddress==null) { // some missing initialization
+            ServletConfig config = getServletConfig();
+            portNumber = config.getInitParameter("portNumber");
+            if (servletLog.isDebugEnabled()) {
+                servletLog.debug("portNumber=" + portNumber);
+            }
+            if (portNumber == null) {
+                portNumber = ":"+request.getLocalPort();
+            } else if (!portNumber.startsWith(":")) {
+                portNumber = ":" + portNumber;
+            }
+
+            serverName = config.getInitParameter("serverName");
+            if (servletLog.isDebugEnabled()) {
+                servletLog.debug("serverName=" + serverName);
+            }
+            if (serverName == null) {
+                serverName = "localhost";
+            }
+
+            serverAddress = "http://" + serverName + portNumber;
+        }
+    }
+
     @Override
     protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         MessageContext msgContext = createMessageContext(getEngine(), request, response);
@@ -214,6 +220,7 @@ public class SRWServlet extends AxisServlet {
             servletLog.error("srwInfo.setSRWStuff failed!");
             return;
         }
+        init(request);
         String uri = request.getRequestURI();
 //        APP=true;
         if (servletLog.isDebugEnabled()) {
@@ -340,6 +347,7 @@ public class SRWServlet extends AxisServlet {
         servletLog.debug("Enter: doGet()");
         response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "GET");
+        init(request);
 
         try {
             AxisEngine engine = getEngine();
